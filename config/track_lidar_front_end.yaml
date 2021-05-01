@@ -33,9 +33,9 @@ pass_through_y_max_plane: 5
 
 # 视野
 pass_through_x_min_preprocess: -1
-pass_through_x_max_preprocess: 40
-pass_through_y_min_preprocess: -40
-pass_through_y_max_preprocess: 40
+pass_through_x_max_preprocess: 35
+pass_through_y_min_preprocess: -30
+pass_through_y_max_preprocess: 30
 pass_through_z_min_preprocess: 0.05
 pass_through_z_max_preprocess: 3
 
@@ -89,8 +89,8 @@ local_map_frame_size: 20
 # 队列距离阈值
 distance_threshold: 0.4
 
-lidar2imu_theta: -2.116457  # 将雷达坐标系旋转到惯导坐标系的角度, 角度制, 逆时针针为正
-lidar2imu_x: 1.986010  # 将雷达坐标系平移到惯导坐标系的x平移量
-lidar2imu_y: -0.014000 # 将雷达坐标系平移到惯导坐标系的y平移量
+lidar2imu_theta: -2.116457
+lidar2imu_x: 1.986010
+lidar2imu_y: -0.014000
 # -2.483022 1.950108 -0.007884
 LidarDataCompensationTime: -0.05

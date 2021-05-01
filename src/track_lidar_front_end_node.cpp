@@ -156,7 +156,7 @@ private:
     }
 }config;
 pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_ptr(new pcl::PointCloud<pcl::PointXYZ>);
-Eigen::Matrix4f lidarToImu(Eigen::Matrix4f::Identity());
+Eigen::Matrix4f imu(Eigen::Matrix4f::Identity());
 ros::Time time_stamp;
 
 // Subscribe点云
@@ -167,7 +167,7 @@ void Callback(const sensor_msgs::PointCloud2::ConstPtr& msg){
 
 Eigen::Matrix4f fromPoseToMatrix(const geometry_msgs::Pose &pose);
 void imu_Callback(const geometry_msgs::PoseStamped& msg){
-    lidarToImu = fromPoseToMatrix(msg.pose);
+    imu = fromPoseToMatrix(msg.pose);
     // time_stamp = msg.header.stamp;
 }
 
@@ -417,8 +417,8 @@ void Preprocess(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_filtered_ptr){
 }
 
 // NDT配准矩阵
-void NDT(pcl::PointCloud<pcl::PointXYZ>::Ptr source, pcl::PointCloud<pcl::PointXYZ>::Ptr target, \
-        Eigen::Matrix4f& guess_matrix, Eigen::Matrix4f& current_pose, Eigen::Matrix4f& lastImuPose, Eigen::Matrix4f& imuPose, \
+void NDT(pcl::PointCloud<pcl::PointXYZ>::Ptr source, pcl::PointCloud<pcl::PointXYZ>::Ptr target, Eigen::Matrix4f lidar_to_imu, \
+        Eigen::Matrix4f& guess_matrix, Eigen::Matrix4f& current_pose, Eigen::Matrix4f& last_imu_pose, Eigen::Matrix4f& imu_pose, \
         pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_filtered){
 
     const Eigen::Matrix4f last_pose = current_pose;
@@ -456,7 +456,7 @@ void NDT(pcl::PointCloud<pcl::PointXYZ>::Ptr source, pcl::PointCloud<pcl::PointX
     current_pose.block<3, 3>(0, 0) = current_pose_angleAxis.toRotationMatrix();
     current_pose(2, 3) = 0;
     // guess_matrix = current_pose * (last_pose.inverse() * current_pose);
-    guess_matrix = current_pose * lidarToImu.inverse() * lastImuPose.inverse() * imuPose * lidarToImu;
+    guess_matrix = current_pose * lidar_to_imu.inverse() * last_imu_pose.inverse() * imu_pose * lidar_to_imu;
 }
 
 // 欧式聚类
@@ -568,17 +568,15 @@ void PushMap(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, \
     *global_map += *cloud;
 }
 
-void loadExternalParameters(Eigen::Matrix4f& lidarToImu)
-{
-    lidarToImu = Eigen::Matrix4f::Identity();
-    const float sin_theta = sin(config.getFloat("lidar2imu_theta") * 3.14 / 180);
-    const float cos_theta = cos(config.getFloat("lidar2imu_theta") * 3.14 / 180);
-    lidarToImu(0, 0) =  cos_theta;
-    lidarToImu(0, 1) = -sin_theta;
-    lidarToImu(1, 0) =  sin_theta;
-    lidarToImu(1, 1) =  cos_theta;
-    lidarToImu(0, 3) =  config.getFloat("lidar2imu_x"); // x_t
-    lidarToImu(1, 3) =  config.getFloat("lidar2imu_y"); // y_t
+void InitLidar2Imu(Eigen::Matrix4f& lidar_to_imu){
+    const float sin_theta = sin(config.getFloat("lidar2imu_theta") * 3.1415 / 180);
+    const float cos_theta = cos(config.getFloat("lidar2imu_theta") * 3.1415 / 180);
+    lidar_to_imu(0, 0) =  cos_theta;
+    lidar_to_imu(0, 1) = -sin_theta;
+    lidar_to_imu(1, 0) =  sin_theta;
+    lidar_to_imu(1, 1) =  cos_theta;
+    lidar_to_imu(0, 3) =  config.getFloat("lidar2imu_x");
+    lidar_to_imu(1, 3) =  config.getFloat("lidar2imu_y");
 }
 
 int main(int argc, char** argv){
@@ -604,10 +602,11 @@ int main(int argc, char** argv){
 
     Eigen::Matrix4f current_pose(Eigen::Matrix4f::Identity());
     Eigen::Matrix4f predict_transform(Eigen::Matrix4f::Identity());
-    Eigen::Matrix4f lastImuPose;
-    Eigen::Matrix4f imuPose;
+    Eigen::Matrix4f lidar_to_imu(Eigen::Matrix4f::Identity());
+    Eigen::Matrix4f last_imu_pose;
+    Eigen::Matrix4f imu_pose;
 
-    loadExternalParameters(lidarToImu);
+    InitLidar2Imu(lidar_to_imu);
 
     lidar_front_end_msgs::FrontendOutput output;
     nav_msgs::Odometry output_odometry;
@@ -615,6 +614,15 @@ int main(int argc, char** argv){
     float last_keyFrame_x;
     float last_keyFrame_y;
     float last_keyFrame_z;
+
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr static_global_map_ptr(new pcl::PointCloud<pcl::PointXYZ>);
+    // if(pcl::io::loadPCDFile<pcl::PointXYZ>("/home/walker-ubuntu/Walkerspace/ros_ws/global_map.pcd", *static_global_map_ptr) == 0){
+    //     ROS_INFO("Load PointCloud file successfully. \ncloud size: %ld", static_global_map_ptr->points.size());
+    // }else{
+    //     ROS_ERROR("Faild loading PointCloud file. ");
+    //     abort();
+    // }
+    // static_global_map_ptr->header.frame_id = "map";
 
     ros::Duration(config.getFloat("startup_duration")).sleep();
     ros::Rate rate(50);
@@ -628,7 +636,7 @@ int main(int argc, char** argv){
             ROS_ERROR("No cloud  input! ");
             continue;
         }
-        if(lidarToImu.size() == 0){
+        if(imu.size() == 0){
             ROS_ERROR("No imu input! ");
             continue;
         }
@@ -636,8 +644,8 @@ int main(int argc, char** argv){
         time_stamp = ros::Time(time_stamp.toSec() + config.getFloat("LidarDataCompensationTime"));
 
         if(cloud_queue.empty()){;
-            lastImuPose = lidarToImu;
-            imuPose = lidarToImu;
+            last_imu_pose = imu;
+            imu_pose = imu;
 
 
             last_keyFrame_x = 0;
@@ -651,14 +659,22 @@ int main(int argc, char** argv){
             pcl::copyPointCloud(*cloud_filtered_ptr, *global_map_ptr);
 
         }else{
-            lastImuPose = imuPose;
-            imuPose = lidarToImu;
+            last_imu_pose = imu_pose;
+            imu_pose = imu;
 
             ros::Time middle = ros::Time::now();
 
             EuclideanCluster(cloud_filtered_ptr, box_array, cloud_filtered_ptr);
-            NDT(cloud_filtered_ptr, local_map_ptr, predict_transform, current_pose, lastImuPose, imuPose , cloud_transformed_ptr);
-            // current_pose = lidarToImu;
+            // NDT(cloud_filtered_ptr, local_map_ptr, lidar_to_imu, predict_transform, current_pose, last_imu_pose, imu_pose , cloud_transformed_ptr);
+            
+            current_pose = current_pose * lidar_to_imu.inverse() * last_imu_pose.inverse() * imu_pose * lidar_to_imu;
+            Eigen::AngleAxis<float> current_pose_angleAxis(current_pose.block<3, 3>(0, 0));
+            current_pose_angleAxis.axis()(0) = 0;
+            current_pose_angleAxis.axis()(1) = 0;
+            current_pose.block<3, 3>(0, 0) = current_pose_angleAxis.toRotationMatrix();
+            current_pose(2, 3) = 0;
+
+            global_box_array.boxes.clear();
             Transform(current_pose, cloud_filtered_ptr, cloud_transformed_ptr, box_array, global_box_array);
 
             const float delta_x = fabs(current_pose(0, 3) - last_keyFrame_x);

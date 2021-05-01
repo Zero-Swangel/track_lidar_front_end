@@ -1,0 +1,96 @@
+node_name: track_lidar_front_end_node
+startup_duration: 1
+
+point_cloud_subscribe_topic: /pandar_points
+
+local_point_cloud_publish_topic: /local_pointcloud
+local_point_cloud_publish_frame_id: map
+
+global_point_cloud_publish_topic: /global_pointcloud
+global_point_cloud_publish_frame_id: map
+
+bounding_box_publish_topic: /bounding_box
+bounding_box_publish_frame_id: map
+
+output_publish_topic: /output
+output_publish_frame_id: map
+
+current_pose_sub_topic: /vis_pose
+
+# 测试用变量
+t1: 0
+t2: 1
+t3: 1
+
+# 旋转矩阵方式
+matrix_rotation: 1
+
+# 地面
+pass_through_x_min_plane: -1
+pass_through_x_max_plane: 5
+pass_through_y_min_plane: -5
+pass_through_y_max_plane: 5
+
+# 视野
+pass_through_x_min_preprocess: -1
+pass_through_x_max_preprocess: 40
+pass_through_y_min_preprocess: -40
+pass_through_y_max_preprocess: 40
+pass_through_z_min_preprocess: 0.05
+pass_through_z_max_preprocess: 3
+
+# 鼻翼
+pass_through_x_min_alar: -1
+pass_through_x_max_alar: 1.1
+pass_through_y_min_alar: -1
+pass_through_y_max_alar: 1
+
+# 找地面
+SAC_distance_threshold: 0.02
+
+# 全局地图
+global_show_VoxelFilter_size: 0.3
+
+# ndt
+ndt_VoxelFilter_size: 0.4
+ndt_StepSize: 0.1
+ndt_Resolution: 1.0
+ndt_MaximumIterations: 10
+
+# icp
+icp_VoxelFilter_size: 0.2
+icp_MaxCorrespondenceDistance: 0.1
+icp_EuclideanFitnessEpsilon: 0.01
+icp_MaximumIterations: 100
+
+# euclidean
+euclidean_cluster_distance: 0.4
+euclidean_cluster_min_size: 5
+euclidean_cluster_max_size: 500000
+
+# 半径滤波
+radius_outlier_r_preprocess: 0.05
+radius_outlier_min_preprocess: 3
+
+# bounding_box
+bbox_cone_judge_min_x: 0.05
+bbox_cone_judge_max_x: 0.5
+bbox_cone_judge_min_y: 0.05
+bbox_cone_judge_max_y: 0.5
+bbox_cone_judge_div_min: 0.5
+bbox_cone_judge_div_max: 4
+
+# 初始队列长度
+cloud_queue_size: 5
+
+# 局部地图长度
+local_map_frame_size: 20
+
+# 队列距离阈值
+distance_threshold: 0.4
+
+lidar2imu_theta: -2.116457  # 将雷达坐标系旋转到惯导坐标系的角度, 角度制, 逆时针针为正
+lidar2imu_x: 1.986010  # 将雷达坐标系平移到惯导坐标系的x平移量
+lidar2imu_y: -0.014000 # 将雷达坐标系平移到惯导坐标系的y平移量
+# -2.483022 1.950108 -0.007884
+LidarDataCompensationTime: -0.05

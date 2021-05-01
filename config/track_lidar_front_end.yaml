@@ -93,4 +93,3 @@ lidar2imu_theta: -2.116457
 lidar2imu_x: 1.986010
 lidar2imu_y: -0.014000
 # -2.483022 1.950108 -0.007884
-LidarDataCompensationTime: -0.05

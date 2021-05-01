@@ -89,7 +89,6 @@ public:
         float_list.push_back("lidar2imu_theta");
         float_list.push_back("lidar2imu_x");
         float_list.push_back("lidar2imu_y");
-        float_list.push_back("LidarDataCompensationTime");
 
         LoadParam(node);
 
@@ -640,8 +639,6 @@ int main(int argc, char** argv){
             ROS_ERROR("No imu input! ");
             continue;
         }
-
-        time_stamp = ros::Time(time_stamp.toSec() + config.getFloat("LidarDataCompensationTime"));
 
         if(cloud_queue.empty()){;
             last_imu_pose = imu;

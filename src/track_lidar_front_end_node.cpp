@@ -66,6 +66,7 @@ public:
         float_list.push_back("pass_through_y_max_alar");
         float_list.push_back("SAC_distance_threshold");
         float_list.push_back("global_show_VoxelFilter_size");
+        float_list.push_back("if_use_ndt");
         float_list.push_back("ndt_VoxelFilter_size");
         float_list.push_back("ndt_StepSize");
         float_list.push_back("ndt_Resolution");
@@ -74,6 +75,7 @@ public:
         float_list.push_back("icp_MaxCorrespondenceDistance");
         float_list.push_back("icp_EuclideanFitnessEpsilon");
         float_list.push_back("icp_MaximumIterations");
+        float_list.push_back("if_remove_wall");
         float_list.push_back("euclidean_cluster_distance");
         float_list.push_back("euclidean_cluster_min_size");
         float_list.push_back("euclidean_cluster_max_size");
@@ -449,11 +451,11 @@ void NDT(pcl::PointCloud<pcl::PointXYZ>::Ptr source, pcl::PointCloud<pcl::PointX
         // else
         //     ROS_INFO("NDT Probability: %f", ndtProbability);
     }
-    Eigen::AngleAxis<float> current_pose_angleAxis(current_pose.block<3, 3>(0, 0));
-    current_pose_angleAxis.axis()(0) = 0;
-    current_pose_angleAxis.axis()(1) = 0;
-    current_pose.block<3, 3>(0, 0) = current_pose_angleAxis.toRotationMatrix();
-    current_pose(2, 3) = 0;
+    // Eigen::AngleAxis<float> current_pose_angleAxis(current_pose.block<3, 3>(0, 0));
+    // current_pose_angleAxis.axis()(0) = 0;
+    // current_pose_angleAxis.axis()(1) = 0;
+    // current_pose.block<3, 3>(0, 0) = current_pose_angleAxis.toRotationMatrix();
+    // current_pose(2, 3) = 0;
     // guess_matrix = current_pose * (last_pose.inverse() * current_pose);
     guess_matrix = current_pose * lidar_to_imu.inverse() * last_imu_pose.inverse() * imu_pose * lidar_to_imu;
 }
@@ -526,10 +528,12 @@ void EuclideanCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, \
             (box.dimensions.z / box.dimensions.y > config.getFloat("bbox_cone_judge_div_max")) || \
             (box.dimensions.z / box.dimensions.x < config.getFloat("bbox_cone_judge_div_min")) || \
             (box.dimensions.z / box.dimensions.x > config.getFloat("bbox_cone_judge_div_max")) ){
-            // extract.setInputCloud(cloud);
-            // extract.setIndices(extract_inlier);
-            // extract.setNegative(true);
-            // extract.filter(*cloud_filtered);
+            if(config.getFloat("if_remove_wall") == 1){
+                extract.setInputCloud(cloud);
+                extract.setIndices(extract_inlier);
+                extract.setNegative(true);
+                extract.filter(*cloud_filtered);
+            }
         }else{
             box_array.boxes.push_back(box);
         }
@@ -602,8 +606,8 @@ int main(int argc, char** argv){
     Eigen::Matrix4f current_pose(Eigen::Matrix4f::Identity());
     Eigen::Matrix4f predict_transform(Eigen::Matrix4f::Identity());
     Eigen::Matrix4f lidar_to_imu(Eigen::Matrix4f::Identity());
-    Eigen::Matrix4f last_imu_pose;
-    Eigen::Matrix4f imu_pose;
+    Eigen::Matrix4f last_imu_pose(Eigen::Matrix4f::Identity());
+    Eigen::Matrix4f imu_pose(Eigen::Matrix4f::Identity());
 
     InitLidar2Imu(lidar_to_imu);
 
@@ -662,9 +666,13 @@ int main(int argc, char** argv){
             ros::Time middle = ros::Time::now();
 
             EuclideanCluster(cloud_filtered_ptr, box_array, cloud_filtered_ptr);
-            // NDT(cloud_filtered_ptr, local_map_ptr, lidar_to_imu, predict_transform, current_pose, last_imu_pose, imu_pose , cloud_transformed_ptr);
-            
-            current_pose = current_pose * lidar_to_imu.inverse() * last_imu_pose.inverse() * imu_pose * lidar_to_imu;
+
+            if(config.getFloat("if_use_ndt") == 1){
+                NDT(cloud_filtered_ptr, local_map_ptr, lidar_to_imu, predict_transform, current_pose, last_imu_pose, imu_pose , cloud_transformed_ptr);
+            }else{
+                current_pose = current_pose * lidar_to_imu.inverse() * last_imu_pose.inverse() * imu_pose * lidar_to_imu;
+            }
+
             Eigen::AngleAxis<float> current_pose_angleAxis(current_pose.block<3, 3>(0, 0));
             current_pose_angleAxis.axis()(0) = 0;
             current_pose_angleAxis.axis()(1) = 0;

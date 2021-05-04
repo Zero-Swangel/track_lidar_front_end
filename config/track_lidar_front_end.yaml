@@ -52,6 +52,7 @@ SAC_distance_threshold: 0.02
 global_show_VoxelFilter_size: 0.3
 
 # ndt
+if_use_ndt: 1 # 1为使用ndt，2为不使用
 ndt_VoxelFilter_size: 0.4
 ndt_StepSize: 0.1
 ndt_Resolution: 1.0
@@ -64,6 +65,7 @@ icp_EuclideanFitnessEpsilon: 0.01
 icp_MaximumIterations: 100
 
 # euclidean
+if_remove_wall: 1 # 1为移除墙面，2为不移除
 euclidean_cluster_distance: 0.4
 euclidean_cluster_min_size: 5
 euclidean_cluster_max_size: 500000

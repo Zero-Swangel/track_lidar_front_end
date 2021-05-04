@@ -597,7 +597,7 @@ int main(int argc, char** argv){
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_transformed_ptr(new pcl::PointCloud<pcl::PointXYZ>);
 
     jsk_recognition_msgs::BoundingBoxArray box_array;
-    jsk_recognition_msgs::BoundingBoxArray global_box_array;
+    jsk_recognition_msgs::BoundingBoxArray local_box_array;
 
     Eigen::Matrix4f current_pose(Eigen::Matrix4f::Identity());
     Eigen::Matrix4f predict_transform(Eigen::Matrix4f::Identity());
@@ -671,8 +671,8 @@ int main(int argc, char** argv){
             current_pose.block<3, 3>(0, 0) = current_pose_angleAxis.toRotationMatrix();
             current_pose(2, 3) = 0;
 
-            global_box_array.boxes.clear();
-            Transform(current_pose, cloud_filtered_ptr, cloud_transformed_ptr, box_array, global_box_array);
+            local_box_array.boxes.clear();
+            Transform(current_pose, cloud_filtered_ptr, cloud_transformed_ptr, box_array, local_box_array);
 
             const float delta_x = fabs(current_pose(0, 3) - last_keyFrame_x);
             const float delta_y = fabs(current_pose(1, 3) - last_keyFrame_y);
@@ -691,19 +691,19 @@ int main(int argc, char** argv){
                 global_map_ptr->header.stamp = time_stamp.toSec();
                 CloudPublisher(global_map_publisher, global_map_ptr);
 
-                global_box_array.header.stamp = time_stamp;
-                global_box_array.header.frame_id = config.getString("bounding_box_publish_frame_id");
-                bbox_publisher.publish(global_box_array);
+                local_box_array.header.stamp = time_stamp;
+                local_box_array.header.frame_id = config.getString("bounding_box_publish_frame_id");
+                bbox_publisher.publish(local_box_array);
 
                 getOdometryFromMatrix4f(current_pose, output_odometry, time_stamp);
                 output.header.frame_id = config.getString("output_publish_frame_id");
                 output.header.stamp = time_stamp;
-                output.bboxArray = global_box_array;
+                output.bboxArray = local_box_array;
                 output.odometry = output_odometry;
                 output_publisher.publish(output);
 
                 ROS_INFO("\n==========\nPreprocess: %fms\nTransform: %fms\nCones: %ld\n==========", \
-                    (middle - begin).toSec()*1000, (ros::Time::now() - middle).toSec()*1000, global_box_array.boxes.size());
+                    (middle - begin).toSec()*1000, (ros::Time::now() - middle).toSec()*1000, local_box_array.boxes.size());
 
             }else{
                 PushMap(cloud_transformed_ptr, cloud_queue, local_map_ptr, global_map_ptr);

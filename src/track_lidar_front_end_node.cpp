@@ -76,6 +76,8 @@ public:
         float_list.push_back("icp_MaxCorrespondenceDistance");
         float_list.push_back("icp_EuclideanFitnessEpsilon");
         float_list.push_back("icp_MaximumIterations");
+        float_list.push_back("source_distance_min");
+        float_list.push_back("source_distance_max");
         float_list.push_back("relocalization_iteration");
         float_list.push_back("relocalization_rand_distance");
         float_list.push_back("relocalization_squared_distance_error");
@@ -512,8 +514,17 @@ bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArra
     fromBoxToPointCloud(box_array, cloud_source_ptr);
     for(auto &box_cloud : bounding_box_queue){
         pcl::copyPointCloud(box_cloud, *cloud_target_ptr);
-        assert(cloud_source_ptr->points.size() != 0);
-        assert(cloud_target_ptr->points.size() != 0);
+        // assert(cloud_source_ptr->points.size() != 0);
+        // assert(cloud_target_ptr->points.size() != 0);
+        // 防止聚类失败时直接去世
+        if(cloud_source_ptr->points.size() == 0){
+            ROS_ERROR("FAILED relocalization! no source input! ");
+            return false;
+        }
+        if(cloud_target_ptr->points.size() == 0){
+            ROS_ERROR("FAILED relocalization! no target input! ");
+            return false;
+        }
 
         // ROS_INFO("source size: %ld", cloud_source_ptr->points.size());
         // ROS_INFO("target size: %ld", cloud_target_ptr->points.size());
@@ -540,13 +551,17 @@ bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArra
             int rand;
 
             // 生成四个随机点
-            while(!CheckDistance(rand_vec_source, 5, 20)){
+            int rand_times = 0; // 防止桶过少时死循环
+            while(!CheckDistance(rand_vec_source, config.getFloat("source_distance_min"), config.getFloat("source_distance_max"))){
+                if(rand_times > 500)
+                    return false;
                 rand_vec_source.clear();
                 for(int i=0; i<4; i++){
                     rand = std::rand();
                     int p = rand % (cloud_source_ptr->points.size());
                     rand_vec_source.push_back(cloud_source_ptr->points[p]);
                 }
+                rand_times++;
             }
             // ROS_INFO("source points");
 

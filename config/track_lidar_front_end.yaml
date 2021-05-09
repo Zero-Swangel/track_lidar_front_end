@@ -66,6 +66,8 @@ icp_EuclideanFitnessEpsilon: 0.01
 icp_MaximumIterations: 100
 
 # relocalization
+source_distance_min: 2
+source_distance_max: 20
 relocalization_iteration: 1000
 relocalization_rand_distance: 2
 relocalization_squared_distance_error: 1
@@ -97,7 +99,7 @@ cloud_queue_size: 5
 local_map_frame_size: 20
 
 # 队列距离阈值
-distance_threshold: 0.4
+distance_threshold: 0.2
 
 lidar2imu_theta: -2.116457
 lidar2imu_x: 1.986010

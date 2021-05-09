@@ -67,6 +67,7 @@ public:
         float_list.push_back("SAC_distance_threshold");
         float_list.push_back("global_show_VoxelFilter_size");
         float_list.push_back("if_use_ndt");
+        float_list.push_back("ndt_min_probability");
         float_list.push_back("ndt_VoxelFilter_size");
         float_list.push_back("ndt_StepSize");
         float_list.push_back("ndt_Resolution");
@@ -75,6 +76,11 @@ public:
         float_list.push_back("icp_MaxCorrespondenceDistance");
         float_list.push_back("icp_EuclideanFitnessEpsilon");
         float_list.push_back("icp_MaximumIterations");
+        float_list.push_back("relocalization_iteration");
+        float_list.push_back("relocalization_rand_distance");
+        float_list.push_back("relocalization_squared_distance_error");
+        float_list.push_back("relocalization_squared_distance_correct");
+        float_list.push_back("final_correct_num");
         float_list.push_back("if_remove_wall");
         float_list.push_back("euclidean_cluster_distance");
         float_list.push_back("euclidean_cluster_min_size");
@@ -214,6 +220,20 @@ Eigen::Matrix4f fromPoseToMatrix(const geometry_msgs::Pose &pose)
                             pose.orientation.z ).toRotationMatrix();
     return transform;
 }
+
+void fromBoxToPointCloud(jsk_recognition_msgs::BoundingBoxArray& box_array, \
+                        pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud){
+        cloud->points.clear();
+        for(auto &box : box_array.boxes){
+            pcl::PointXYZ point;
+            point.x = box.pose.position.x;
+            point.y = box.pose.position.y;
+            point.z = box.pose.position.z;
+            cloud->points.push_back(point);
+        }
+        // cloud.header.frame_id = config.getString("global_map_publish_frame_id");
+        cloud->header.stamp = ros::Time::now().toSec();
+    }
 
 // 直通滤波
 void PassThrough(std::string field_name, float min, float max, bool pass_nagetive, \
@@ -418,11 +438,10 @@ void Preprocess(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_filtered_ptr){
 }
 
 // NDT配准矩阵
-void NDT(pcl::PointCloud<pcl::PointXYZ>::Ptr source, pcl::PointCloud<pcl::PointXYZ>::Ptr target, Eigen::Matrix4f lidar_to_imu, \
-        Eigen::Matrix4f& guess_matrix, Eigen::Matrix4f& current_pose, Eigen::Matrix4f& last_imu_pose, Eigen::Matrix4f& imu_pose, \
-        pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_filtered){
+bool NDT(pcl::PointCloud<pcl::PointXYZ>::Ptr source, pcl::PointCloud<pcl::PointXYZ>::Ptr target, Eigen::Matrix4f imu_to_lidar, \
+        Eigen::Matrix4f& current_pose, Eigen::Matrix4f& last_imu_pose, Eigen::Matrix4f& imu_pose, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_filtered){
 
-    const Eigen::Matrix4f last_pose = current_pose;
+    Eigen::Matrix4f guess_matrix = current_pose * imu_to_lidar.inverse() * last_imu_pose.inverse() * imu_pose * imu_to_lidar;
     pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_source(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_target(new pcl::PointCloud<pcl::PointXYZ>);
 
@@ -432,7 +451,7 @@ void NDT(pcl::PointCloud<pcl::PointXYZ>::Ptr source, pcl::PointCloud<pcl::PointX
     if(filtered_target->points.size() < filtered_source->points.size()*1.5){
         ROS_ERROR("ndt.registration failded! lose frame!");
         current_pose = guess_matrix;
-
+        return false;
     }else{
         pcl::NormalDistributionsTransform<pcl::PointXYZ, pcl::PointXYZ> ndt;
         ndt.setTransformationEpsilon(0.01);
@@ -443,21 +462,283 @@ void NDT(pcl::PointCloud<pcl::PointXYZ>::Ptr source, pcl::PointCloud<pcl::PointX
         ndt.setInputTarget(filtered_target);
         ndt.align(*cloud_filtered, guess_matrix);
 
-        current_pose = ndt.getFinalTransformation();
-
         const float ndtProbability = ndt.getTransformationProbability();
-        if (ndtProbability < 2.1)
+        if (ndtProbability < config.getFloat("ndt_min_probability")){
+            current_pose = guess_matrix;
             ROS_ERROR("FAILED.  NDT Probability: %f", ndtProbability);
-        // else
-        //     ROS_INFO("NDT Probability: %f", ndtProbability);
+            return false;
+        }else{
+            current_pose = ndt.getFinalTransformation();
+            // ROS_INFO("NDT Probability: %f", ndtProbability);  
+            return true;
+        }
     }
-    // Eigen::AngleAxis<float> current_pose_angleAxis(current_pose.block<3, 3>(0, 0));
-    // current_pose_angleAxis.axis()(0) = 0;
-    // current_pose_angleAxis.axis()(1) = 0;
-    // current_pose.block<3, 3>(0, 0) = current_pose_angleAxis.toRotationMatrix();
-    // current_pose(2, 3) = 0;
-    // guess_matrix = current_pose * (last_pose.inverse() * current_pose);
-    guess_matrix = current_pose * lidar_to_imu.inverse() * last_imu_pose.inverse() * imu_pose * lidar_to_imu;
+    return false;
+}
+
+float PointDistance(pcl::PointXYZ point1, pcl::PointXYZ point2){
+    return sqrt((point1.x - point2.x)*(point1.x - point2.x) + \
+            (point1.y - point2.y)*(point1.y - point2.y) + \
+            (point1.z - point2.z)*(point1.z - point2.z));
+}
+bool CheckDistance(std::vector<pcl::PointXYZ> vector, float min, float max){
+    if(vector.size() == 0)
+        return false;
+    assert(vector.size() == 4);
+    for(int i=0; i<3; i++){
+        for(int j=i+1; j<4; j++){
+            if(PointDistance(vector[i], vector[j]) < min)
+                return false;
+            if(PointDistance(vector[i], vector[j]) > max)
+                return false;
+        }
+    }
+    return true;
+}
+// ReLocalization(box_array[转成点云], bounding_box_queue, imu_to_lidar, current_pose, last_imu_pose, imu_pose);
+bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArray box_array, std::deque<pcl::PointCloud<pcl::PointXYZ>> bounding_box_queue, \
+                    Eigen::Matrix4f imu_to_lidar, Eigen::Matrix4f& current_pose, Eigen::Matrix4f& last_imu_pose, Eigen::Matrix4f& imu_pose){
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_source_ptr(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_target_ptr(new pcl::PointCloud<pcl::PointXYZ>);
+    // pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_transformed_ptr(new pcl::PointCloud<pcl::PointXYZ>);
+
+    int best_correct_num = -1;
+    float best_error = std::numeric_limits<float>::max();
+    Eigen::Matrix4f best_transform(Eigen::Matrix4f::Identity());
+
+    ros::Publisher source_pub = node.advertise<sensor_msgs::PointCloud2>("/source_cloud", 100, true);
+    ros::Publisher target_pub = node.advertise<sensor_msgs::PointCloud2>("/target_cloud", 100, true);
+
+    fromBoxToPointCloud(box_array, cloud_source_ptr);
+    for(auto &box_cloud : bounding_box_queue){
+        pcl::copyPointCloud(box_cloud, *cloud_target_ptr);
+        assert(cloud_source_ptr->points.size() != 0);
+        assert(cloud_target_ptr->points.size() != 0);
+
+        // ROS_INFO("source size: %ld", cloud_source_ptr->points.size());
+        // ROS_INFO("target size: %ld", cloud_target_ptr->points.size());
+
+        // 平面化(可以去除)
+        for(int i=0; i<cloud_source_ptr->points.size(); i++){
+            cloud_source_ptr->points[i].z = 0;
+        }
+        for(int i=0; i<cloud_target_ptr->points.size(); i++){
+            cloud_target_ptr->points[i].z = 0;
+        }
+
+        std::vector<pcl::PointXYZ> rand_vec_source;
+        std::vector<pcl::PointXYZ> rand_vec_target;
+
+        
+
+        std::srand((unsigned int)(time(NULL)));
+        ros::Time start = ros::Time::now(); // 正式开始
+
+        for(int iteration=0; iteration < config.getFloat("relocalization_iteration"); iteration++){
+            rand_vec_source.clear();
+            rand_vec_target.clear();
+            int rand;
+
+            // 生成四个随机点
+            while(!CheckDistance(rand_vec_source, 5, 20)){
+                rand_vec_source.clear();
+                for(int i=0; i<4; i++){
+                    rand = std::rand();
+                    int p = rand % (cloud_source_ptr->points.size());
+                    rand_vec_source.push_back(cloud_source_ptr->points[p]);
+                }
+            }
+            // ROS_INFO("source points");
+
+            // 记录距离信息(可以用vector替换，按ij遍历的顺序排列就行)
+            float source_distance_01 = PointDistance(rand_vec_source[0], rand_vec_source[1]);
+            float source_distance_02 = PointDistance(rand_vec_source[0], rand_vec_source[2]);
+            float source_distance_03 = PointDistance(rand_vec_source[0], rand_vec_source[3]);
+            float source_distance_12 = PointDistance(rand_vec_source[1], rand_vec_source[2]);
+            float source_distance_13 = PointDistance(rand_vec_source[1], rand_vec_source[3]);
+            float source_distance_23 = PointDistance(rand_vec_source[2], rand_vec_source[3]);
+            float target_distance_01 = 0;
+            float target_distance_02 = 0;
+            float target_distance_03 = 0;
+            float target_distance_12 = 0;
+            float target_distance_13 = 0;
+            float target_distance_23 = 0;
+
+            std::vector<int> point_indexs; // 没用了
+            point_indexs.clear();
+            { // 随机第一点
+                rand = std::rand();
+                int p = rand % (cloud_target_ptr->points.size());
+                rand_vec_target.push_back(cloud_target_ptr->points[p]);
+                point_indexs.push_back(p);
+            }
+            // ROS_INFO("target point 1");
+
+            float min_distance = config.getFloat("relocalization_rand_distance"); // 改小了会更精确但也会更慢，改大了会比较看运气
+            std::vector<pcl::PointXYZ> point_list;
+
+            // 生成第二点
+            point_list.clear();
+            for(int i=0; i<cloud_target_ptr->points.size(); i++){
+                target_distance_01 = PointDistance(rand_vec_target[0], cloud_target_ptr->points[i]);
+                if(fabs(target_distance_01 - source_distance_01) > min_distance)
+                    continue;
+                point_list.push_back(cloud_target_ptr->points[i]);
+            }
+            if(point_list.size()>0){
+                rand = std::rand();
+                int p = rand % (point_list.size());
+                rand_vec_target.push_back(point_list[p]);
+                point_indexs.push_back(p);
+            }
+            // ROS_INFO("target point 2");
+
+            // 生成第三点
+            point_list.clear();
+            for(int i=0; i<cloud_target_ptr->points.size(); i++){
+                target_distance_02 = PointDistance(rand_vec_target[0], cloud_target_ptr->points[i]);
+                target_distance_12 = PointDistance(rand_vec_target[1], cloud_target_ptr->points[i]);
+                if(fabs(target_distance_02- source_distance_02) > min_distance)
+                    continue;
+                if(fabs(target_distance_12- source_distance_12) > min_distance)
+                    continue;
+                point_list.push_back(cloud_target_ptr->points[i]);
+            }
+            if(point_list.size()>0){
+                rand = std::rand();
+                int p = rand % (point_list.size());
+                rand_vec_target.push_back(point_list[p]);
+                point_indexs.push_back(p);
+            }
+            // ROS_INFO("target point 3");
+
+            // 生成第四点
+            point_list.clear();
+            for(int i=0; i<cloud_target_ptr->points.size(); i++){
+                target_distance_03 = PointDistance(rand_vec_target[0], cloud_target_ptr->points[i]);
+                target_distance_13 = PointDistance(rand_vec_target[1], cloud_target_ptr->points[i]);
+                target_distance_23 = PointDistance(rand_vec_target[2], cloud_target_ptr->points[i]);
+                if(fabs(target_distance_03- source_distance_03) > min_distance)
+                    continue;
+                if(fabs(target_distance_13- source_distance_13) > min_distance)
+                    continue;
+                if(fabs(target_distance_23- source_distance_23) > min_distance)
+                    continue;
+                point_list.push_back(cloud_target_ptr->points[i]);
+            }
+            if(point_list.size()>0){
+                rand = std::rand();
+                int p = rand % (point_list.size());
+                rand_vec_target.push_back(point_list[p]);
+                point_indexs.push_back(p);
+            }
+            // ROS_INFO("target point 4");
+
+            // 不足四个点，跳过
+            if(rand_vec_target.size() != 4)
+                continue;
+
+            // 对应点距离过大，跳过
+            if(PointDistance(rand_vec_source[0], rand_vec_target[0]) > 2)
+                continue;
+            if(PointDistance(rand_vec_source[1], rand_vec_target[1]) > 2)
+                continue;
+            if(PointDistance(rand_vec_source[2], rand_vec_target[2]) > 2)
+                continue;
+            if(PointDistance(rand_vec_source[3], rand_vec_target[3]) > 2)
+                continue;
+
+            // 控制点距离过近，跳过(如果前面没问题的话这里按道理不会出现过近)
+            // if(PointDistance(rand_vec_target[0], rand_vec_target[1]) < 0.05)
+            //     continue;
+            // if(PointDistance(rand_vec_target[0], rand_vec_target[2]) < 0.05)
+            //     continue;
+            // if(PointDistance(rand_vec_target[0], rand_vec_target[3]) < 0.05)
+            //     continue;
+            // if(PointDistance(rand_vec_target[1], rand_vec_target[2]) < 0.05)
+            //     continue;
+            // if(PointDistance(rand_vec_target[1], rand_vec_target[3]) < 0.05)
+            //     continue;
+            // if(PointDistance(rand_vec_target[2], rand_vec_target[3]) < 0.05)
+            //     continue;
+
+            // svd配准选取的点云
+            pcl::PointCloud<pcl::PointXYZ>::Ptr svd_cloud_source_ptr(new pcl::PointCloud<pcl::PointXYZ>);
+            pcl::PointCloud<pcl::PointXYZ>::Ptr svd_cloud_target_ptr(new pcl::PointCloud<pcl::PointXYZ>);
+            pcl::PointCloud<pcl::PointXYZ>::Ptr svd_cloud_output_ptr(new pcl::PointCloud<pcl::PointXYZ>);
+            for(int i=0; i<4; i++){
+                svd_cloud_source_ptr->points.push_back(rand_vec_source[i]);
+                svd_cloud_target_ptr->points.push_back(rand_vec_target[i]);
+                assert(svd_cloud_source_ptr->points.size() == 4);
+                assert(svd_cloud_target_ptr->points.size() == 4);
+            }
+
+            pcl::registration::TransformationEstimationSVD<pcl::PointXYZ,pcl::PointXYZ> svd;
+            pcl::registration::TransformationEstimationSVD<pcl::PointXYZ,pcl::PointXYZ>::Matrix4 svd_transformation;
+            svd.estimateRigidTransformation (*svd_cloud_source_ptr, *svd_cloud_target_ptr, svd_transformation);
+            // std::cout << "transform: n" << svd_transformation << std::endl;
+
+            pcl::transformPointCloud(*cloud_source_ptr, *svd_cloud_output_ptr, svd_transformation);
+
+            CloudPublisher(source_pub, cloud_source_ptr);
+            CloudPublisher(target_pub, cloud_target_ptr);
+
+            // 神奇bug，前十来次循环会有不明问题
+            // 导致正常的点云通过正常的变换矩阵变换得到一个全在一个点上的点云
+            // 导致best_error直接变成0
+            if(iteration < 20){
+                // std::cout << "pass iteration " << iteration << std::endl;
+                continue;
+            }
+
+            // KDTree计算配准得分
+            int K = 4;
+            int correct_num = 0;
+            float this_error = 0;
+            std::vector<int> point_index(K);
+            std::vector<float> point_squared_distance(K);
+            std::vector<float> point_distances;
+            pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
+            kdtree.setInputCloud(cloud_target_ptr);
+
+            for(int i=0; i<svd_cloud_output_ptr->points.size(); i++){
+                if(kdtree.nearestKSearch(svd_cloud_output_ptr->points[i], K, point_index, point_squared_distance)){
+                    if(point_squared_distance[0] > config.getFloat("relocalization_squared_distance_error")){
+                        this_error += point_squared_distance[0];
+                    }
+                    if(point_squared_distance[0] < config.getFloat("relocalization_squared_distance_correct")){
+                        correct_num++;
+                        point_distances.push_back(point_squared_distance[0]);
+                    }
+                }else{
+                    this_error = std::numeric_limits<float>::max();
+                    break;
+                }
+            }
+            if(correct_num == 0){
+                this_error = std::numeric_limits<float>::max();
+            }
+
+            if((this_error < best_error)&&(correct_num >= best_correct_num)){
+                best_error = this_error;
+                best_correct_num = correct_num;
+                best_transform = svd_transformation;
+                // pcl::transformPointCloud(*cloud_source_ptr, *cloud_transformed_ptr, best_transform);
+                // std::cout << "====================" << std::endl;
+                // std::cout << "best_error: " << best_error << std::endl;
+                // // std::cout << "this_error: " << this_error << std::endl;
+                // std::cout << "correct_num: " << correct_num << std::endl;
+                // // std::cout << "best_transform: \n" << best_transform << std::endl;
+                // std::cout << "Time: " << (ros::Time::now() - start).toSec() << std::endl;
+                // std::cout << "iteration: " << iteration << std::endl;
+            }
+        }
+        if(best_correct_num > config.getFloat("final_correct_num")){
+            current_pose = best_transform;
+            return true;
+        }
+    }
+    return false;
 }
 
 // 欧式聚类
@@ -543,14 +824,19 @@ void EuclideanCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, \
 }
 
 void Transform(Eigen::Matrix4f current_pose, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_transformed, \
-                jsk_recognition_msgs::BoundingBoxArray box_array, jsk_recognition_msgs::BoundingBoxArray& box_array_transformed){
+                jsk_recognition_msgs::BoundingBoxArray box_array, jsk_recognition_msgs::BoundingBoxArray& box_array_transformed, pcl::PointCloud<pcl::PointXYZ>::Ptr& box_cloud){
             for (auto &box : box_array.boxes){
-                Eigen::Vector4f point (box.pose.position.x, box.pose.position.y, box.pose.position.z, 1);
+                pcl::PointXYZ box_point;
+                Eigen::Vector4f point(box.pose.position.x, box.pose.position.y, box.pose.position.z, 1);
                 point = current_pose * point;
                 box.pose.position.x = point(0);
                 box.pose.position.y = point(1);
                 box.pose.position.z = point(2);
+                box_point.x = point(0);
+                box_point.y = point(1);
+                box_point.z = point(2);
                 box_array_transformed.boxes.push_back(box);
+                box_cloud->points.push_back(box_point);
             }
             pcl::transformPointCloud(*cloud, *cloud_transformed, current_pose);
 }
@@ -571,15 +857,15 @@ void PushMap(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, \
     *global_map += *cloud;
 }
 
-void InitLidar2Imu(Eigen::Matrix4f& lidar_to_imu){
+void InitLidar2Imu(Eigen::Matrix4f& imu_to_lidar){
     const float sin_theta = sin(config.getFloat("lidar2imu_theta") * 3.1415 / 180);
     const float cos_theta = cos(config.getFloat("lidar2imu_theta") * 3.1415 / 180);
-    lidar_to_imu(0, 0) =  cos_theta;
-    lidar_to_imu(0, 1) = -sin_theta;
-    lidar_to_imu(1, 0) =  sin_theta;
-    lidar_to_imu(1, 1) =  cos_theta;
-    lidar_to_imu(0, 3) =  config.getFloat("lidar2imu_x");
-    lidar_to_imu(1, 3) =  config.getFloat("lidar2imu_y");
+    imu_to_lidar(0, 0) =  cos_theta;
+    imu_to_lidar(0, 1) = -sin_theta;
+    imu_to_lidar(1, 0) =  sin_theta;
+    imu_to_lidar(1, 1) =  cos_theta;
+    imu_to_lidar(0, 3) =  config.getFloat("lidar2imu_x");
+    imu_to_lidar(1, 3) =  config.getFloat("lidar2imu_y");
 }
 
 int main(int argc, char** argv){
@@ -595,21 +881,22 @@ int main(int argc, char** argv){
     ros::Publisher output_publisher = node.advertise<lidar_front_end_msgs::FrontendOutput>(config.getString("output_publish_topic"), 100, true);
 
     std::deque<pcl::PointCloud<pcl::PointXYZ>> cloud_queue;
+    std::deque<pcl::PointCloud<pcl::PointXYZ>> bounding_box_queue;
     pcl::PointCloud<pcl::PointXYZ>::Ptr local_map_ptr(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::PointXYZ>::Ptr global_map_ptr(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_ptr(new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_transformed_ptr(new pcl::PointCloud<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr box_transformed_ptr(new pcl::PointCloud<pcl::PointXYZ>);
 
     jsk_recognition_msgs::BoundingBoxArray box_array;
     jsk_recognition_msgs::BoundingBoxArray local_box_array;
 
     Eigen::Matrix4f current_pose(Eigen::Matrix4f::Identity());
-    Eigen::Matrix4f predict_transform(Eigen::Matrix4f::Identity());
-    Eigen::Matrix4f lidar_to_imu(Eigen::Matrix4f::Identity());
+    Eigen::Matrix4f imu_to_lidar(Eigen::Matrix4f::Identity());
     Eigen::Matrix4f last_imu_pose(Eigen::Matrix4f::Identity());
     Eigen::Matrix4f imu_pose(Eigen::Matrix4f::Identity());
 
-    InitLidar2Imu(lidar_to_imu);
+    InitLidar2Imu(imu_to_lidar);
 
     lidar_front_end_msgs::FrontendOutput output;
     nav_msgs::Odometry output_odometry;
@@ -617,6 +904,8 @@ int main(int argc, char** argv){
     float last_keyFrame_x;
     float last_keyFrame_y;
     float last_keyFrame_z;
+
+    bool if_add_key_frame;
 
     // pcl::PointCloud<pcl::PointXYZ>::Ptr static_global_map_ptr(new pcl::PointCloud<pcl::PointXYZ>);
     // if(pcl::io::loadPCDFile<pcl::PointXYZ>("/home/walker-ubuntu/Walkerspace/ros_ws/global_map.pcd", *static_global_map_ptr) == 0){
@@ -631,6 +920,7 @@ int main(int argc, char** argv){
     ros::Rate rate(50);
     while(ros::ok()){
         ros::spinOnce();
+        if_add_key_frame = true;
         ros::Time begin = ros::Time::now();
 
         Preprocess(cloud_filtered_ptr);
@@ -668,9 +958,23 @@ int main(int argc, char** argv){
             EuclideanCluster(cloud_filtered_ptr, box_array, cloud_filtered_ptr);
 
             if(config.getFloat("if_use_ndt") == 1){
-                NDT(cloud_filtered_ptr, local_map_ptr, lidar_to_imu, predict_transform, current_pose, last_imu_pose, imu_pose , cloud_transformed_ptr);
+                if(NDT(cloud_filtered_ptr, local_map_ptr, imu_to_lidar, current_pose, last_imu_pose, imu_pose , cloud_transformed_ptr)){
+                    if_add_key_frame = true;
+                }else{
+                    // ROS_INFO("try relocalization");
+                    if(ReLocalization(node, box_array, bounding_box_queue, imu_to_lidar, current_pose, last_imu_pose, imu_pose)){
+                        ROS_INFO("relocalization success");
+                        if_add_key_frame = true;
+                    }else{
+                        ROS_ERROR("relocalization failed");
+                        if_add_key_frame = false; // false
+                    }
+
+                    // current_pose = current_pose * imu_to_lidar.inverse() * last_imu_pose.inverse() * imu_pose * imu_to_lidar;
+                    // if_add_key_frame = false;
+                }
             }else{
-                current_pose = current_pose * lidar_to_imu.inverse() * last_imu_pose.inverse() * imu_pose * lidar_to_imu;
+                current_pose = current_pose * imu_to_lidar.inverse() * last_imu_pose.inverse() * imu_pose * imu_to_lidar;
             }
 
             Eigen::AngleAxis<float> current_pose_angleAxis(current_pose.block<3, 3>(0, 0));
@@ -680,18 +984,23 @@ int main(int argc, char** argv){
             current_pose(2, 3) = 0;
 
             local_box_array.boxes.clear();
-            Transform(current_pose, cloud_filtered_ptr, cloud_transformed_ptr, box_array, local_box_array);
+            box_transformed_ptr->points.clear();
+            Transform(current_pose, cloud_filtered_ptr, cloud_transformed_ptr, box_array, local_box_array, box_transformed_ptr);
 
             const float delta_x = fabs(current_pose(0, 3) - last_keyFrame_x);
             const float delta_y = fabs(current_pose(1, 3) - last_keyFrame_y);
             const float delta_z = fabs(current_pose(2, 3) - last_keyFrame_z);
             const float distance = sqrt(delta_x*delta_x + delta_y*delta_y + delta_z*delta_z);
 
-            if(distance > config.getFloat("distance_threshold") || cloud_queue.size() <= config.getFloat("cloud_queue_size")){
+            if(if_add_key_frame && (distance > config.getFloat("distance_threshold") || cloud_queue.size() <= config.getFloat("cloud_queue_size"))){
                 last_keyFrame_x = current_pose(0, 3);
                 last_keyFrame_y = current_pose(1, 3);
                 last_keyFrame_z = current_pose(2, 3);
                 PushMap(cloud_transformed_ptr, cloud_queue, local_map_ptr, global_map_ptr);
+                bounding_box_queue.push_back(*box_transformed_ptr);
+                while(bounding_box_queue.size()>20){
+                    bounding_box_queue.pop_front();
+                }
 
                 local_map_ptr->header.stamp = time_stamp.toSec();
                 CloudPublisher(local_map_publisher, local_map_ptr);

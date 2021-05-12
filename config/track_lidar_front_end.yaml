@@ -22,6 +22,9 @@ t1: 0
 t2: 1
 t3: 1
 
+# cone_map
+OneConeDistancethreshold: 1.5
+
 # 旋转矩阵方式
 matrix_rotation: 1
 
@@ -52,12 +55,12 @@ SAC_distance_threshold: 0.02
 global_show_VoxelFilter_size: 0.3
 
 # ndt
-if_use_ndt: 1 # 1为使用ndt，2为不使用
+if_use_ndt: 2 # 1为使用ndt，2为不使用
 ndt_VoxelFilter_size: 0.4
 ndt_StepSize: 0.1
 ndt_Resolution: 1.0
 ndt_MaximumIterations: 10
-ndt_min_probability: 1.7
+ndt_min_probability: 1.5
 
 # icp
 icp_VoxelFilter_size: 0.2
@@ -68,15 +71,16 @@ icp_MaximumIterations: 100
 # relocalization
 source_distance_min: 2
 source_distance_max: 20
-relocalization_iteration: 1000
-relocalization_rand_distance: 2
-relocalization_squared_distance_error: 1
+relocalization_iteration: 10000
+relocalization_rand_distance: 1
+relocalization_squared_distance_error: 1.0
 relocalization_squared_distance_correct: 0.5
-final_correct_num: 10
+final_correct_num: 6
 
 # euclidean
 if_remove_wall: 1 # 1为移除墙面，2为不移除
-euclidean_cluster_distance: 0.4
+euclidean_cluster_VoxelFilter_size: 0.001
+euclidean_cluster_distance: 0.5
 euclidean_cluster_min_size: 5
 euclidean_cluster_max_size: 500000
 
@@ -89,7 +93,7 @@ bbox_cone_judge_min_x: 0.05
 bbox_cone_judge_max_x: 0.5
 bbox_cone_judge_min_y: 0.05
 bbox_cone_judge_max_y: 0.5
-bbox_cone_judge_div_min: 0.5
+bbox_cone_judge_div_min: 0.25
 bbox_cone_judge_div_max: 2
 
 # 初始队列长度

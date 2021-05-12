@@ -26,7 +26,7 @@ Panels:
     Experimental: false
     Name: Time
     SyncMode: 0
-    SyncSource: Pandar_Points
+    SyncSource: Local_PointCloud
 Preferences:
   PromptSaveOnExit: true
 Toolbars:
@@ -60,7 +60,7 @@ Visualization Manager:
       Unreliable: false
       Value: false
       alpha: 1
-      color: 239; 41; 41
+      color: 252; 233; 79
       coloring: Flat color
       line width: 0.004999999888241291
       only edge: false
@@ -161,7 +161,7 @@ Visualization Manager:
       Color: 136; 138; 133
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: true
+      Enabled: false
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -176,7 +176,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: true
+      Value: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -246,7 +246,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 45.55109786987305
+      Distance: 80.27660369873047
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -254,17 +254,17 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 6.327709674835205
-        Y: 1.0134166479110718
-        Z: 6.5721025466918945
+        X: 35.879302978515625
+        Y: -21.958847045898438
+        Z: 8.24088191986084
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.3653983473777771
+      Pitch: 1.5697963237762451
       Target Frame: <Fixed Frame>
-      Yaw: 3.183562755584717
+      Yaw: 3.153562068939209
     Saved: ~
 Window Geometry:
   Displays:

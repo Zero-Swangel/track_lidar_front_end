@@ -6,6 +6,8 @@ project(track_lidar_front_end)
 ### 设置编译器标准为C++14,编译类型为Release
 ################################################
 set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_CXX_FLAGS "-std=c++14")
+set(CMAKE_CXX_FLAGS_RELEASE "$ENV{CXXFLAGS} -O3 -Wall")
 add_compile_options(-std=c++14)
 
 
@@ -24,7 +26,7 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 catkin_package(
-  CATKIN_DEPENDS 
+  CATKIN_DEPENDS
 )
 
 
@@ -35,8 +37,12 @@ include_directories(
   include
   ${catkin_INCLUDE_DIRS}
   ${PCL_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
 )
-link_directories(${PCL_LIBRARY_DIRS})
+link_directories(
+  include
+  ${PCL_LIBRARY_DIRS}
+)
 add_definitions(${PCL_DEFINITIONS})
 
 
@@ -64,6 +70,7 @@ list(APPEND TARGET_LIBRARIES
   ${PCL_COMMON_LIBRARIES}
   ${PCL_IO_LIBRARIES}
   ${PCL_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
 )
 
 ################################################

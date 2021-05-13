@@ -55,12 +55,12 @@ SAC_distance_threshold: 0.02
 global_show_VoxelFilter_size: 0.3
 
 # ndt
-if_use_ndt: 2 # 1为使用ndt，2为不使用
+if_use_ndt: 1 # 1为使用ndt，2为不使用
 ndt_VoxelFilter_size: 0.4
 ndt_StepSize: 0.1
 ndt_Resolution: 1.0
 ndt_MaximumIterations: 10
-ndt_min_probability: 1.5
+ndt_min_probability: 0.1
 
 # icp
 icp_VoxelFilter_size: 0.2

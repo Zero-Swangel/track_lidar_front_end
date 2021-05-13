@@ -522,7 +522,6 @@ void Rotate( pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, Eigen::Vector4f plane_v
         const float theta = acos(cos_theta);
         const float sin_theta = sin(theta);
 
-        size_t index = 0;
         for(auto &point : cloud->points){
             const Eigen::Vector3f v = Eigen::Vector3f(point.x, point.y, point.z) - point_A;
             const Eigen::Vector3f VRR = v.dot(rotate_axis) * rotate_axis;
@@ -684,10 +683,10 @@ bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArra
     // ROS_INFO("target size: %ld", cloud_target_ptr->points.size());
 
     // 平面化(可以去除)
-    for(int i=0; i<cloud_source_ptr->points.size(); i++){
+    for(size_t i=0; i<cloud_source_ptr->points.size(); i++){
         cloud_source_ptr->points[i].z = 0;
     }
-    for(int i=0; i<cloud_target_ptr->points.size(); i++){
+    for(size_t i=0; i<cloud_target_ptr->points.size(); i++){
         cloud_target_ptr->points[i].z = 0;
     }
 
@@ -704,7 +703,7 @@ bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArra
     pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
     kdtree.setInputCloud(cloud_target_ptr);
 
-    for(int i=0; i<cloud_ndt_ptr->points.size(); i++){
+    for(size_t i=0; i<cloud_ndt_ptr->points.size(); i++){
         if(kdtree.nearestKSearch(cloud_ndt_ptr->points[i], K, point_index, point_squared_distance)){
             if(point_squared_distance[0] > config.getFloat("relocalization_squared_distance_error")){
                 this_error += point_squared_distance[0];
@@ -744,7 +743,7 @@ bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArra
     std::vector<pcl::PointXYZ> rand_vec_target;
 
     std::srand((unsigned int)(time(NULL)));
-    ros::Time start = ros::Time::now(); // 正式开始
+    // ros::Time start = ros::Time::now(); // 正式开始
 
     for(int iteration=0; iteration < config.getFloat("relocalization_iteration"); iteration++){
         rand_vec_source.clear();
@@ -795,7 +794,7 @@ bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArra
 
         // 生成第二点
         point_list.clear();
-        for(int i=0; i<cloud_target_ptr->points.size(); i++){
+        for(size_t i=0; i<cloud_target_ptr->points.size(); i++){
             target_distance_01 = PointDistance(rand_vec_target[0], cloud_target_ptr->points[i]);
             if(fabs(target_distance_01 - source_distance_01) > min_distance)
                 continue;
@@ -811,7 +810,7 @@ bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArra
 
         // 生成第三点
         point_list.clear();
-        for(int i=0; i<cloud_target_ptr->points.size(); i++){
+        for(size_t i=0; i<cloud_target_ptr->points.size(); i++){
             target_distance_02 = PointDistance(rand_vec_target[0], cloud_target_ptr->points[i]);
             target_distance_12 = PointDistance(rand_vec_target[1], cloud_target_ptr->points[i]);
             if(fabs(target_distance_02- source_distance_02) > min_distance)
@@ -830,7 +829,7 @@ bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArra
 
         // 生成第四点
         point_list.clear();
-        for(int i=0; i<cloud_target_ptr->points.size(); i++){
+        for(size_t i=0; i<cloud_target_ptr->points.size(); i++){
             target_distance_03 = PointDistance(rand_vec_target[0], cloud_target_ptr->points[i]);
             target_distance_13 = PointDistance(rand_vec_target[1], cloud_target_ptr->points[i]);
             target_distance_23 = PointDistance(rand_vec_target[2], cloud_target_ptr->points[i]);
@@ -851,6 +850,8 @@ bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArra
         // ROS_INFO("target point 4");
 
         // 不足四个点，跳过
+        if(rand_vec_source.size() != 4)
+            continue;
         if(rand_vec_target.size() != 4)
             continue;
 
@@ -885,9 +886,9 @@ bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArra
         for(int i=0; i<4; i++){
             svd_cloud_source_ptr->points.push_back(rand_vec_source[i]);
             svd_cloud_target_ptr->points.push_back(rand_vec_target[i]);
-            assert(svd_cloud_source_ptr->points.size() == 4);
-            assert(svd_cloud_target_ptr->points.size() == 4);
         }
+        assert(svd_cloud_source_ptr->points.size() == 4);
+        assert(svd_cloud_target_ptr->points.size() == 4);
 
         pcl::registration::TransformationEstimationSVD<pcl::PointXYZ,pcl::PointXYZ> svd;
         pcl::registration::TransformationEstimationSVD<pcl::PointXYZ,pcl::PointXYZ>::Matrix4 svd_transformation;
@@ -917,7 +918,7 @@ bool ReLocalization(ros::NodeHandle& node, jsk_recognition_msgs::BoundingBoxArra
         pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
         kdtree.setInputCloud(cloud_target_ptr);
 
-        for(int i=0; i<svd_cloud_output_ptr->points.size(); i++){
+        for(size_t i=0; i<svd_cloud_output_ptr->points.size(); i++){
             if(kdtree.nearestKSearch(svd_cloud_output_ptr->points[i], K, point_index, point_squared_distance)){
                 if(point_squared_distance[0] > config.getFloat("relocalization_squared_distance_error")){
                     this_error += point_squared_distance[0];
@@ -1035,8 +1036,9 @@ void EuclideanCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, \
             box_array.boxes.push_back(box);
         }
     }
-    // RadiusOutlier(config.getFloat("radius_outlier_r_preprocess"), config.getFloat("radius_outlier_min_preprocess"), false, \
-    //             cloud_filtered, cloud_filtered);
+    /* RadiusOutlier(config.getFloat("radius_outlier_r_preprocess"), config.getFloat("radius_outlier_min_preprocess"), false, \
+                 cloud_filtered, cloud_filtered);
+    */
 }
 
 void Transform(Eigen::Matrix4f current_pose, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_transformed, \
@@ -1126,9 +1128,9 @@ int main(int argc, char** argv){
     lidar_front_end_msgs::FrontendOutput output;
     nav_msgs::Odometry output_odometry;
 
-    float last_keyFrame_x;
-    float last_keyFrame_y;
-    float last_keyFrame_z;
+    float last_keyFrame_x = 0;
+    float last_keyFrame_y = 0;
+    float last_keyFrame_z = 0;
 
     bool if_add_key_frame;
 
@@ -1187,7 +1189,7 @@ int main(int argc, char** argv){
                 if(NDT(cloud_filtered_ptr, local_map_ptr, imu_to_lidar, current_pose, last_imu_pose, imu_pose , cloud_transformed_ptr)){
                     if_add_key_frame = true;
                 }else{
-                    // ROS_INFO("try relocalization");
+                    ROS_INFO("try relocalization");
                     EuclideanCluster(cloud_filtered_ptr, box_array, cloud_filtered_ptr);
                     if(ReLocalization(node, box_array, cone_map->getBBoxArray(), current_pose)){
                         ROS_INFO("relocalization success");
@@ -1230,7 +1232,7 @@ int main(int argc, char** argv){
                 }
                 delete cone_map;
                 cone_map = new ConeMap();
-                for(int i=0; i<bounding_box_queue.size(); i++){
+                for(size_t i=0; i<bounding_box_queue.size(); i++){
                     cone_map->addCones(bounding_box_queue[i]);
                 }
 

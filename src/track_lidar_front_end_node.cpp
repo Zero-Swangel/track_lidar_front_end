@@ -340,6 +340,7 @@ void CloudPublisher(ros::Publisher publisher, \
                 const pcl::PointCloud<pcl::PointXYZ>::ConstPtr& cloud){
     sensor_msgs::PointCloud2 cloud_output;
     pcl::toROSMsg(*cloud, cloud_output);
+    cloud_output.header.stamp = ros::Time::now();
     publisher.publish(cloud_output);
 }
 
@@ -1135,6 +1136,7 @@ int main(int argc, char** argv){
     bool if_add_key_frame;
 
     ConeMap* cone_map = new ConeMap();
+    ConeMap* global_cone_map = new ConeMap();
 
     // pcl::PointCloud<pcl::PointXYZ>::Ptr static_global_map_ptr(new pcl::PointCloud<pcl::PointXYZ>);
     // if(pcl::io::loadPCDFile<pcl::PointXYZ>("/home/walker-ubuntu/Walkerspace/ros_ws/global_map.pcd", *static_global_map_ptr) == 0){
@@ -1163,7 +1165,7 @@ int main(int argc, char** argv){
             continue;
         }
 
-        if(cloud_queue.empty()){;
+        if(cloud_queue.empty()){
             last_imu_pose = imu;
             imu_pose = imu;
 
@@ -1227,6 +1229,7 @@ int main(int argc, char** argv){
 
                 PushMap(cloud_transformed_ptr, cloud_queue, local_map_ptr, global_map_ptr);
                 bounding_box_queue.push_back(local_box_array);
+                global_cone_map->addCones(local_box_array);
                 while(bounding_box_queue.size()>20){
                     bounding_box_queue.pop_front();
                 }
@@ -1242,9 +1245,9 @@ int main(int argc, char** argv){
                 global_map_ptr->header.stamp = time_stamp.toSec();
                 CloudPublisher(global_map_publisher, global_map_ptr);
 
-                local_box_array = cone_map->getBBoxArray();
-                // local_box_array = box_array;
-                local_box_array.header.stamp = time_stamp;
+                // local_box_array = global_cone_map->getBBoxArray();
+                local_box_array = box_array;
+                local_box_array.header.stamp = ros::Time::now();
                 local_box_array.header.frame_id = config.getString("bounding_box_publish_frame_id");
                 bbox_publisher.publish(local_box_array);
 

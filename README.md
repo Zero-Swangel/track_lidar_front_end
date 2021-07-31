@@ -11,7 +11,7 @@
 - PCL
 - Eigen3
 - jsk_recognition_msgs
-- [lidar_msgs](https://github.com/Zero-Swangel/lidar_front_end_msgs)
+- [lidar_msgs](http://hrt-perception.icu/hrt21d/perception/lidar_msgs)
 
 ## 项目的构建和运行
 

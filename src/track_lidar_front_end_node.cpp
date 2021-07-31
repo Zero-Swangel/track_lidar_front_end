@@ -1115,7 +1115,7 @@ int main(int argc, char** argv){
 
     jsk_recognition_msgs::BoundingBoxArray box_array;
     jsk_recognition_msgs::BoundingBoxArray local_box_array;
-    jsk_recognition_msgs::BoundingBoxArray global_box_array;
+    jsk_recognition_msgs::BoundingBoxArray output_box_array;
 
     Eigen::Matrix4f current_pose(Eigen::Matrix4f::Identity());
     Eigen::Matrix4f last_pose(Eigen::Matrix4f::Identity());
@@ -1244,16 +1244,16 @@ int main(int argc, char** argv){
                 global_map_ptr->header.stamp = time_stamp.toSec();
                 CloudPublisher(global_map_publisher, global_map_ptr);
 
-                global_box_array = global_cone_map->getBBoxArray();
-                // global_box_array = box_array;
-                global_box_array.header.stamp = ros::Time::now();
-                global_box_array.header.frame_id = config.getString("bounding_box_publish_frame_id");
-                bbox_publisher.publish(global_box_array);
+                // output_box_array = global_cone_map->getBBoxArray();
+                output_box_array = box_array;
+                output_box_array.header.stamp = ros::Time::now();
+                output_box_array.header.frame_id = config.getString("bounding_box_publish_frame_id");
+                bbox_publisher.publish(output_box_array);
 
                 getOdometryFromMatrix4f(current_pose, output_odometry, time_stamp);
                 output.header.frame_id = config.getString("output_publish_frame_id");
                 output.header.stamp = time_stamp;
-                output.bboxArray = global_box_array;
+                output.bboxArray = output_box_array;
                 output.odometry = output_odometry;
                 output_publisher.publish(output);
 

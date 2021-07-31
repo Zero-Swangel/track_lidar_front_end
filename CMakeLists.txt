@@ -15,9 +15,8 @@ add_compile_options(-std=c++14)
 ### 找到库依赖
 ################################################
 find_package(catkin REQUIRED COMPONENTS
-  pcl_ros
+  pcl_ros REQUIRED
   roscpp
-  rospy
   std_msgs
   nav_msgs
   jsk_recognition_msgs

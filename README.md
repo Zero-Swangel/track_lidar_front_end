@@ -42,12 +42,15 @@ catkin_make -DCATKIN_WHITELIST_PACKAGES="track_lidar_front_end" -DCMAKE_EXPORT_C
 
 ```bash
 roslaunch track_lidar_front_end track_lidar_front_end_node.launch
+roslaunch track_lidar_front_end launch_front_cheat.launch # 前端及作弊程序
+roslaunch track_lidar_front_end launch_all.launch # 前端、作弊程序及后端
 ```
 
 ## 已知问题
 
 1. 预处理有ransac找地面过慢导致的少量闪烁，调整`pass_through_*_*_plane`可以解决
 2. 在随手测试和改动中有大量莫名代码，整体结构很乱，在之后会修正
+3. 出现过back end输出位姿随imu的情况，是因为初始化时前端没启动导致，要在前后端启动之间加延时(已手动加上)
 
 ## 项目组织结构
 

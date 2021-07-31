@@ -20,7 +20,7 @@
 
 #include <jsk_recognition_msgs/BoundingBox.h>
 #include <jsk_recognition_msgs/BoundingBoxArray.h>
-#include <lidar_front_end_msgs/FrontendOutput.h>
+#include <lidar_msgs/LidarOutput.h>
 
 #include <message_filters/subscriber.h>
 #include <message_filters/synchronizer.h>
@@ -33,8 +33,6 @@
 #include <std_msgs/String.h>
 #include <nav_msgs/Odometry.h>
 #include <geometry_msgs/PoseStamped.h>
-
-#include <PATH.h>
 
 class param_loader{
 public: 
@@ -1088,7 +1086,7 @@ void InitLidar2Imu(Eigen::Matrix4f& imu_to_lidar){
 }
 
 int main(int argc, char** argv){
-    ros::init(argc, argv, "NODE_NAME");
+    ros::init(argc, argv, "track_lidar_front_end");
     ros::NodeHandle node("~");
     config.load(node);
     
@@ -1105,7 +1103,7 @@ int main(int argc, char** argv){
     ros::Publisher local_map_publisher = node.advertise<sensor_msgs::PointCloud2>(config.getString("local_point_cloud_publish_topic"), 100, true);
     ros::Publisher global_map_publisher = node.advertise<sensor_msgs::PointCloud2>(config.getString("global_point_cloud_publish_topic"), 100, true);
     ros::Publisher bbox_publisher = node.advertise<jsk_recognition_msgs::BoundingBoxArray>(config.getString("bounding_box_publish_topic"), 100, true);
-    ros::Publisher output_publisher = node.advertise<lidar_front_end_msgs::FrontendOutput>(config.getString("output_publish_topic"), 100, true);
+    ros::Publisher output_publisher = node.advertise<lidar_msgs::LidarOutput>(config.getString("output_publish_topic"), 100, true);
 
     std::deque<pcl::PointCloud<pcl::PointXYZ>> cloud_queue;
     std::deque<jsk_recognition_msgs::BoundingBoxArray> bounding_box_queue;
@@ -1127,7 +1125,7 @@ int main(int argc, char** argv){
 
     InitLidar2Imu(imu_to_lidar);
 
-    lidar_front_end_msgs::FrontendOutput output;
+    lidar_msgs::LidarOutput output;
     nav_msgs::Odometry output_odometry;
 
     float last_keyFrame_x = 0;

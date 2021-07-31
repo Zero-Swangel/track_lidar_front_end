@@ -1,9 +1,0 @@
-#ifndef PATH_H_IN
-#define PATH_H_IN
-
-#include <string>
-
-const std::string NODE_NAME = "${NODE_NAME}";
-const std::string WORK_SPACE_PATH = "${WORK_SPACE_PATH}";
-
-#endif

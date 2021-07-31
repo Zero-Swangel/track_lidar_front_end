@@ -20,9 +20,8 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   nav_msgs
-  message_generation
   jsk_recognition_msgs
-  lidar_front_end_msgs
+  lidar_msgs
 )
 
 catkin_package(
@@ -44,21 +43,6 @@ link_directories(
   ${PCL_LIBRARY_DIRS}
 )
 add_definitions(${PCL_DEFINITIONS})
-
-
-################################################
-### 设置工作根目录
-################################################
-set(WORK_SPACE_PATH ${PROJECT_SOURCE_DIR})
-set(NODE_NAME ${PROJECT_NAME}_node)
-configure_file(
-  ${PROJECT_SOURCE_DIR}/include/PATH.h.in
-  ${PROJECT_SOURCE_DIR}/include/PATH.h
-)
-configure_file(
-  ${PROJECT_SOURCE_DIR}/launch/${PROJECT_NAME}_node.launch.in
-  ${PROJECT_SOURCE_DIR}/launch/${PROJECT_NAME}_node.launch
-)
 
 
 ################################################

@@ -9,5 +9,5 @@
     <node pkg="track_lidar_back_end" type="track_lidar_back_end_node" name="track_lidar_back_end_node" output="screen"/>
     <node pkg="track_lidar_cheat" type="track_lidar_cheat_node" name="track_lidar_cheat_node" output="screen"/>
 
-    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find track_lidar_front_end)/rviz/1.rviz" required="true" output="log"/>
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find track_lidar_front_end)/rviz/track.rviz" required="true" output="log"/>
 </launch>

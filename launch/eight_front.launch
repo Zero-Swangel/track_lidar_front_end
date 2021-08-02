@@ -1,0 +1,11 @@
+<launch>
+    <node pkg="rosbag" type="play" name="bag" args="-l /home/walker-ubuntu/Walkerspace/point_cloud_bags/_1_2020-11-12-15-24-48.bag" output="log"></node>
+
+    <rosparam file="$(find track_lidar_front_end)/config/eight_lidar_front_end.yaml" command="load" ns="track_lidar_front_end_node"/>
+    <rosparam file="$(find eight_core)/config/eight_core.yaml" command="load" ns="eight_core_node"/>
+
+    <node pkg="track_lidar_front_end" type="track_lidar_front_end_node" name="track_lidar_front_end_node" output="screen"/>
+    <node pkg="eight_core" type="eight_core_node" name="eight_core_node" output="screen"/>
+
+    <node pkg="rviz" type="rviz" name="rviz" args="-d $(find track_lidar_front_end)/rviz/eight.rviz" required="true" output="log"/>
+</launch>

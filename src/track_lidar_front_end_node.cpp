@@ -35,7 +35,7 @@
 #include <geometry_msgs/PoseStamped.h>
 
 class param_loader{
-public: 
+public:
     void load(ros::NodeHandle& node){
         /* String */
         string_list.push_back("point_cloud_subscribe_topic");
@@ -43,7 +43,8 @@ public:
         string_list.push_back("local_point_cloud_publish_frame_id");
         string_list.push_back("global_point_cloud_publish_topic");
         string_list.push_back("global_point_cloud_publish_frame_id");
-        string_list.push_back("bounding_box_publish_topic");
+        string_list.push_back("local_bounding_box_publish_topic");
+        string_list.push_back("global_bounding_box_publish_topic");
         string_list.push_back("bounding_box_publish_frame_id");
         string_list.push_back("output_publish_topic");
         string_list.push_back("output_publish_frame_id");
@@ -135,7 +136,7 @@ public:
         return float_map[var_name];
     }
 
-private: 
+private:
     std::vector<std::string> string_list;
     std::vector<std::string> float_list;
     std::map<std::string, std::string> string_map;
@@ -187,7 +188,7 @@ public:
     void addCones (const BBoxArray &box_array)
     {
         // 如果是第一帧, 桶全部加入
-        if (coneMap.empty()) 
+        if (coneMap.empty())
         {
             addTimes = 1;
             for (auto &bbox : box_array.boxes)
@@ -216,7 +217,7 @@ public:
             if (minDistance_sqare < config.getFloat("OneConeDistancethreshold") * config.getFloat("OneConeDistancethreshold"))
             {
                 nearestCone_ptr->update(bbox);
-            }    
+            }
             else // 不在阈值以内, 说明是一个第一册观测到的cone
                 coneMap.push_back(Cone(bbox));
         }
@@ -304,11 +305,11 @@ public:
             this->bbox = that.bbox;
             this->occuredTimes = that.occuredTimes;
         }
-        
+
         BBox bbox;
         int occuredTimes;
     };
-    
+
     std::vector<Cone> coneMap;
     int addTimes;
 };
@@ -370,9 +371,9 @@ Eigen::Matrix4f fromPoseToMatrix(const geometry_msgs::Pose &pose)
 
     // 余弦矩阵 -> 四元数
     transform.block<3, 3>(0, 0) = \
-        Eigen::Quaternionf( pose.orientation.w, 
-                            pose.orientation.x, 
-                            pose.orientation.y, 
+        Eigen::Quaternionf( pose.orientation.w,
+                            pose.orientation.x,
+                            pose.orientation.y,
                             pose.orientation.z ).toRotationMatrix();
     return transform;
 }
@@ -514,7 +515,7 @@ void Rotate( pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, Eigen::Vector4f plane_v
             1, 0, 0 ;
         b << -plane_vector(3), 0, 20;
         Eigen::Vector3f point_B = A.colPivHouseholderQr().solve(b);
-        
+
         Eigen::Vector3f rotate_axis = (point_B - point_A).normalized();
 
         const float cos_theta = vector_before.normalized().dot(vector_after);
@@ -624,7 +625,7 @@ bool NDT(pcl::PointCloud<pcl::PointXYZ>::Ptr source, pcl::PointCloud<pcl::PointX
             return false;
         }else{
             current_pose = ndt.getFinalTransformation();
-            // ROS_INFO("NDT Probability: %f", ndtProbability);  
+            // ROS_INFO("NDT Probability: %f", ndtProbability);
             return true;
         }
     }
@@ -967,7 +968,7 @@ void EuclideanCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, \
 
     pcl::PointIndices::Ptr extract_inlier(new pcl::PointIndices());
     pcl::ExtractIndices<pcl::PointXYZ> extract;
-    
+
     pcl::copyPointCloud(*cloud, *cloud_2d);
     // VoxelGrid(config.getFloat("euclidean_cluster_VoxelFilter_size"), cloud_2d, cloud_2d);
     for (auto &point : cloud_2d->points)
@@ -1007,7 +1008,7 @@ void EuclideanCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, \
             if(z > max_z) max_z = z;
             extract_inlier->indices.push_back(*pit);
         }
-        
+
         jsk_recognition_msgs::BoundingBox box;
         box.header.frame_id = config.getString("bounding_box_publish_frame_id");
         box.pose.position.x = sum_x / it->indices.size();
@@ -1025,12 +1026,12 @@ void EuclideanCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, \
             (box.dimensions.z / box.dimensions.y > config.getFloat("bbox_cone_judge_div_max")) || \
             (box.dimensions.z / box.dimensions.x < config.getFloat("bbox_cone_judge_div_min")) || \
             (box.dimensions.z / box.dimensions.x > config.getFloat("bbox_cone_judge_div_max")) ){
-            if(config.getFloat("if_remove_wall") == 1){
-                extract.setInputCloud(cloud);
-                extract.setIndices(extract_inlier);
-                extract.setNegative(true);
-                extract.filter(*cloud_filtered);
-            }
+            // if(config.getFloat("if_remove_wall") == 1){
+            //     extract.setInputCloud(cloud);
+            //     extract.setIndices(extract_inlier);
+            //     extract.setNegative(true);
+            //     extract.filter(*cloud_filtered);
+            // }
         }else{
             box_array.boxes.push_back(box);
         }
@@ -1089,7 +1090,7 @@ int main(int argc, char** argv){
     ros::init(argc, argv, "track_lidar_front_end");
     ros::NodeHandle node("~");
     config.load(node);
-    
+
     // ros::Subscriber cloud_subscriber = node.subscribe(config.getString("point_cloud_subscribe_topic"), 100, Callback);
     // ros::Subscriber imu_subscriber = node.subscribe(config.getString("current_pose_sub_topic"), 100, imu_Callback);
 
@@ -1102,7 +1103,8 @@ int main(int argc, char** argv){
 
     ros::Publisher local_map_publisher = node.advertise<sensor_msgs::PointCloud2>(config.getString("local_point_cloud_publish_topic"), 100, true);
     ros::Publisher global_map_publisher = node.advertise<sensor_msgs::PointCloud2>(config.getString("global_point_cloud_publish_topic"), 100, true);
-    ros::Publisher bbox_publisher = node.advertise<jsk_recognition_msgs::BoundingBoxArray>(config.getString("bounding_box_publish_topic"), 100, true);
+    ros::Publisher local_bbox_publisher = node.advertise<jsk_recognition_msgs::BoundingBoxArray>(config.getString("local_bounding_box_publish_topic"), 100, true);
+    ros::Publisher global_bbox_publisher = node.advertise<jsk_recognition_msgs::BoundingBoxArray>(config.getString("global_bounding_box_publish_topic"), 100, true);
     ros::Publisher output_publisher = node.advertise<lidar_msgs::LidarOutput>(config.getString("output_publish_topic"), 100, true);
 
     std::deque<pcl::PointCloud<pcl::PointXYZ>> cloud_queue;
@@ -1115,7 +1117,7 @@ int main(int argc, char** argv){
 
     jsk_recognition_msgs::BoundingBoxArray box_array;
     jsk_recognition_msgs::BoundingBoxArray local_box_array;
-    jsk_recognition_msgs::BoundingBoxArray output_box_array;
+    jsk_recognition_msgs::BoundingBoxArray global_box_array;
 
     Eigen::Matrix4f current_pose(Eigen::Matrix4f::Identity());
     Eigen::Matrix4f last_pose(Eigen::Matrix4f::Identity());
@@ -1205,6 +1207,8 @@ int main(int argc, char** argv){
                 current_pose = current_pose * imu_to_lidar.inverse() * last_imu_pose.inverse() * imu_pose * imu_to_lidar;
             }
 
+            ros::Time transform = ros::Time::now();
+
             Eigen::AngleAxis<float> current_pose_angleAxis(current_pose.block<3, 3>(0, 0));
             current_pose_angleAxis.axis()(0) = 0;
             current_pose_angleAxis.axis()(1) = 0;
@@ -1227,13 +1231,16 @@ int main(int argc, char** argv){
                 Transform(current_pose, cloud_filtered_ptr, cloud_transformed_ptr, box_array, local_box_array, box_transformed_ptr);
 
                 PushMap(cloud_transformed_ptr, cloud_queue, local_map_ptr, global_map_ptr);
+
                 bounding_box_queue.push_back(local_box_array);
                 global_cone_map->addCones(local_box_array);
+
                 while(bounding_box_queue.size()>20){
                     bounding_box_queue.pop_front();
                 }
                 delete cone_map;
                 cone_map = new ConeMap();
+
                 for(size_t i=0; i<bounding_box_queue.size(); i++){
                     cone_map->addCones(bounding_box_queue[i]);
                 }
@@ -1244,21 +1251,32 @@ int main(int argc, char** argv){
                 global_map_ptr->header.stamp = time_stamp.toSec();
                 CloudPublisher(global_map_publisher, global_map_ptr);
 
-                // output_box_array = global_cone_map->getBBoxArray();
-                output_box_array = box_array;
-                output_box_array.header.stamp = ros::Time::now();
-                output_box_array.header.frame_id = config.getString("bounding_box_publish_frame_id");
-                bbox_publisher.publish(output_box_array);
+                box_array.header.stamp = ros::Time::now();
+                box_array.header.frame_id = config.getString("bounding_box_publish_frame_id");
+                global_box_array.header.stamp = ros::Time::now();
+                global_box_array.header.frame_id = config.getString("bounding_box_publish_frame_id");
+
+                global_box_array.boxes = global_cone_map->getBBoxArray().boxes;
+                global_bbox_publisher.publish(global_box_array);
+                local_bbox_publisher.publish(box_array);
 
                 getOdometryFromMatrix4f(current_pose, output_odometry, time_stamp);
+
                 output.header.frame_id = config.getString("output_publish_frame_id");
                 output.header.stamp = time_stamp;
-                output.bboxArray = output_box_array;
+                output.local_bounding_box_array.header.stamp = ros::Time::now();
+                output.local_bounding_box_array.header.frame_id = config.getString("bounding_box_publish_frame_id");
+                output.global_bounding_box_array.header.stamp = ros::Time::now();
+                output.global_bounding_box_array.header.frame_id = config.getString("bounding_box_publish_frame_id");
+
+                output.local_bounding_box_array.boxes = box_array.boxes;
+                output.global_bounding_box_array.boxes = global_box_array.boxes;
                 output.odometry = output_odometry;
+
                 output_publisher.publish(output);
 
-                ROS_INFO("\n==========\nPreprocess: %fms\nTransform: %fms\nCones: %ld\n==========", \
-                    (middle - begin).toSec()*1000, (ros::Time::now() - middle).toSec()*1000, local_box_array.boxes.size());
+                ROS_INFO("\n==========\nPreprocess: %fms\nTransform: %fms\nAll: %fms\nCones: %ld\n==========", \
+                    (middle - begin).toSec()*1000, (transform - middle).toSec()*1000, (ros::Time::now() - middle).toSec()*1000, local_box_array.boxes.size());
 
             }else{
                 PushMap(cloud_transformed_ptr, cloud_queue, local_map_ptr, global_map_ptr);

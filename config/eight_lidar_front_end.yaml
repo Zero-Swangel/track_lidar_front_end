@@ -36,10 +36,10 @@ pass_through_y_min_plane: -5
 pass_through_y_max_plane: 5
 
 # 视野
-pass_through_x_min_preprocess: -1
-pass_through_x_max_preprocess: 35
-pass_through_y_min_preprocess: -30
-pass_through_y_max_preprocess: 30
+pass_through_x_min_preprocess: -40
+pass_through_x_max_preprocess: 40
+pass_through_y_min_preprocess: -40
+pass_through_y_max_preprocess: 40
 pass_through_z_min_preprocess: 0.05
 pass_through_z_max_preprocess: 5
 
@@ -80,7 +80,7 @@ final_correct_num: 6
 
 # euclidean
 if_remove_wall: 2 # 1为移除墙面，2为不移除
-euclidean_cluster_VoxelFilter_size: 0.01
+euclidean_cluster_VoxelFilter_size: 0.001
 euclidean_cluster_distance: 0.6
 euclidean_cluster_min_size: 5
 euclidean_cluster_max_size: 5000

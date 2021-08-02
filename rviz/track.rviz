@@ -96,19 +96,6 @@ Visualization Manager:
       Topic: /vis_pose
       Unreliable: false
       Value: false
-    - Class: jsk_rviz_plugin/BoundingBoxArray
-      Enabled: false
-      Name: Front_BoundingBoxArray
-      Queue Size: 10
-      Topic: /bounding_box
-      Unreliable: false
-      Value: false
-      alpha: 1
-      color: 252; 233; 79
-      coloring: Flat color
-      line width: 0.004999999888241291
-      only edge: false
-      show coords: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -121,7 +108,7 @@ Visualization Manager:
       Color: 255; 255; 255
       Color Transformer: FlatColor
       Decay Time: 0
-      Enabled: false
+      Enabled: true
       Invert Rainbow: false
       Max Color: 255; 255; 255
       Min Color: 0; 0; 0
@@ -136,7 +123,7 @@ Visualization Manager:
       Unreliable: false
       Use Fixed Frame: true
       Use rainbow: true
-      Value: false
+      Value: true
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -165,6 +152,32 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: false
+    - Class: jsk_rviz_plugin/BoundingBoxArray
+      Enabled: true
+      Name: Front_Local_BoundingBoxArray
+      Queue Size: 10
+      Topic: /local_bounding_box
+      Unreliable: false
+      Value: true
+      alpha: 1
+      color: 252; 233; 79
+      coloring: Flat color
+      line width: 0.004999999888241291
+      only edge: false
+      show coords: false
+    - Class: jsk_rviz_plugin/BoundingBoxArray
+      Enabled: false
+      Name: Front_Global_BoundingBoxArray
+      Queue Size: 10
+      Topic: /global_bounding_box
+      Unreliable: false
+      Value: false
+      alpha: 1
+      color: 252; 233; 79
+      coloring: Flat color
+      line width: 0.004999999888241291
+      only edge: false
+      show coords: false
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -263,7 +276,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/Orbit
-      Distance: 147.94923400878906
+      Distance: 97.9404525756836
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -271,9 +284,9 @@ Visualization Manager:
         Value: false
       Field of View: 0.7853981852531433
       Focal Point:
-        X: 26.125059127807617
-        Y: -3.8229520320892334
-        Z: 3.614098310470581
+        X: 24.960546493530273
+        Y: -30.925968170166016
+        Z: 3.6032817363739014
       Focal Shape Fixed Size: true
       Focal Shape Size: 0.05000000074505806
       Invert Z Axis: false

@@ -18,8 +18,14 @@
 #include <pcl/registration/icp.h>
 #include <pcl/registration/ndt.h>
 
-#include <jsk_recognition_msgs/BoundingBox.h>
+#include <pcl/gpu/octree/octree.hpp>
+#include <pcl/gpu/containers/device_array.hpp>
+#include <pcl/gpu/segmentation/gpu_extract_clusters.h>
+#include <pcl/gpu/segmentation/impl/gpu_extract_clusters.hpp>
+
 #include <jsk_recognition_msgs/BoundingBoxArray.h>
+#include <lidar_msgs/BoundingBox.h>
+#include <lidar_msgs/BoundingBoxArray.h>
 #include <lidar_msgs/LidarOutput.h>
 
 #include <message_filters/subscriber.h>
@@ -407,8 +413,8 @@ void PassThrough(std::string field_name, float min, float max, bool pass_nagetiv
 // 体素滤波
 void VoxelGrid(float size, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, \
                 pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_filtered){
-    pcl::ApproximateVoxelGrid<pcl::PointXYZ> voxel_grid;
-    // pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
+    // pcl::ApproximateVoxelGrid<pcl::PointXYZ> voxel_grid;
+    pcl::VoxelGrid<pcl::PointXYZ> voxel_grid;
     voxel_grid.setInputCloud(cloud);
     voxel_grid.setLeafSize(size, size, size);
     // voxel_grid.setDownsampleAllData(true);
@@ -604,7 +610,7 @@ bool NDT(pcl::PointCloud<pcl::PointXYZ>::Ptr source, pcl::PointCloud<pcl::PointX
     VoxelGrid(config.getFloat("ndt_VoxelFilter_size"), source, filtered_source);
     VoxelGrid(config.getFloat("ndt_VoxelFilter_size"), target, filtered_target);
 
-    if(filtered_target->points.size() < filtered_source->points.size()*1.5){
+    if((filtered_target->points.size() < filtered_source->points.size()*1.5) || filtered_source->size() < 120){
         ROS_ERROR("ndt.registration failded! lose frame!");
         current_pose = guess_matrix;
         return false;
@@ -1041,6 +1047,105 @@ void EuclideanCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, \
     */
 }
 
+void GPUEuclideanCluster(pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud, \
+                      jsk_recognition_msgs::BoundingBoxArray& box_array, \
+                      pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_filtered){
+    std::vector<pcl::PointIndices> inlier;
+    pcl::EuclideanClusterExtraction<pcl::PointXYZ> ece;
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>);
+    pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_2d(new pcl::PointCloud<pcl::PointXYZ>);
+
+    pcl::PointIndices::Ptr extract_inlier(new pcl::PointIndices());
+    pcl::ExtractIndices<pcl::PointXYZ> extract;
+
+    pcl::copyPointCloud(*cloud, *cloud_2d);
+    // VoxelGrid(config.getFloat("euclidean_cluster_VoxelFilter_size"), cloud_2d, cloud_2d);
+    for (auto &point : cloud_2d->points)
+        point.z = 0;
+
+    // ece.setInputCloud(cloud_2d);
+    // ece.setClusterTolerance(config.getFloat("euclidean_cluster_distance"));
+    // ece.setMinClusterSize(config.getFloat("euclidean_cluster_min_size"));
+    // ece.setMaxClusterSize(config.getFloat("euclidean_cluster_max_size"));
+    // ece.setSearchMethod(tree);
+    // ece.extract(inlier);
+
+    pcl::gpu::Octree::PointCloud cloud_device;
+    cloud_device.upload(cloud_2d->points);
+
+    pcl::gpu::Octree::Ptr octree_device (new pcl::gpu::Octree);
+    octree_device->setCloud(cloud_device);
+    octree_device->build();
+
+    std::vector<pcl::PointIndices> cluster_indices_gpu;
+    pcl::gpu::EuclideanClusterExtraction gec;
+    gec.setClusterTolerance (config.getFloat("euclidean_cluster_distance"));
+    gec.setMinClusterSize (config.getFloat("euclidean_cluster_min_size"));
+    gec.setMaxClusterSize (config.getFloat("euclidean_cluster_max_size"));
+    gec.setSearchMethod (octree_device);
+    gec.setHostCloud( cloud_2d);
+    gec.extract (cluster_indices_gpu);
+
+    box_array.boxes.clear();
+
+    for(std::vector<pcl::PointIndices>::const_iterator it = cluster_indices_gpu.begin(); it != cluster_indices_gpu.end(); it++){
+        float sum_x=0, sum_y=0, sum_z=0;
+        float min_x = std::numeric_limits<float>::max();
+        float max_x = -std::numeric_limits<float>::max();
+        float min_y = std::numeric_limits<float>::max();
+        float max_y = -std::numeric_limits<float>::max();
+        float min_z = std::numeric_limits<float>::max();
+        float max_z = -std::numeric_limits<float>::max();
+        extract_inlier->indices.clear();
+
+        for(std::vector<int>::const_iterator pit = it->indices.begin(); pit != it->indices.end(); pit++){
+            const float x = cloud->points[*pit].x;
+            const float y = cloud->points[*pit].y;
+            const float z = cloud->points[*pit].z;
+            sum_x += x;
+            sum_y += y;
+            sum_z += z;
+            if(x < min_x) min_x = x;
+            if(y < min_y) min_y = y;
+            if(z < min_z) min_z = z;
+            if(x > max_x) max_x = x;
+            if(y > max_y) max_y = y;
+            if(z > max_z) max_z = z;
+            extract_inlier->indices.push_back(*pit);
+        }
+
+        jsk_recognition_msgs::BoundingBox box;
+        box.header.frame_id = config.getString("bounding_box_publish_frame_id");
+        box.pose.position.x = sum_x / it->indices.size();
+        box.pose.position.y = sum_y / it->indices.size();
+        box.pose.position.z = sum_z / it->indices.size();
+        box.dimensions.x = max_x > min_x ? max_x - min_x : min_x - max_x;
+        box.dimensions.y = max_y > min_y ? max_y - min_y : min_y - max_y;
+        box.dimensions.z = max_z > min_z ? max_z - min_z : min_z - max_z;
+
+        if( (box.dimensions.x > config.getFloat("bbox_cone_judge_max_x")) || \
+            (box.dimensions.x < config.getFloat("bbox_cone_judge_min_x")) || \
+            (box.dimensions.y > config.getFloat("bbox_cone_judge_max_y")) || \
+            (box.dimensions.y < config.getFloat("bbox_cone_judge_min_y")) || \
+            (box.dimensions.z / box.dimensions.y < config.getFloat("bbox_cone_judge_div_min")) || \
+            (box.dimensions.z / box.dimensions.y > config.getFloat("bbox_cone_judge_div_max")) || \
+            (box.dimensions.z / box.dimensions.x < config.getFloat("bbox_cone_judge_div_min")) || \
+            (box.dimensions.z / box.dimensions.x > config.getFloat("bbox_cone_judge_div_max")) ){
+            // if(config.getFloat("if_remove_wall") == 1){
+            //     extract.setInputCloud(cloud);
+            //     extract.setIndices(extract_inlier);
+            //     extract.setNegative(true);
+            //     extract.filter(*cloud_filtered);
+            // }
+        }else{
+            box_array.boxes.push_back(box);
+        }
+    }
+    /* RadiusOutlier(config.getFloat("radius_outlier_r_preprocess"), config.getFloat("radius_outlier_min_preprocess"), false, \
+                 cloud_filtered, cloud_filtered);
+    */
+}
+
 void Transform(Eigen::Matrix4f current_pose, pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, pcl::PointCloud<pcl::PointXYZ>::Ptr& cloud_transformed, \
                 jsk_recognition_msgs::BoundingBoxArray box_array, jsk_recognition_msgs::BoundingBoxArray& box_array_transformed, pcl::PointCloud<pcl::PointXYZ>::Ptr& box_cloud){
             for (auto &box : box_array.boxes){
@@ -1154,8 +1259,10 @@ int main(int argc, char** argv){
         ros::spinOnce();
         if_add_key_frame = true;
         ros::Time begin = ros::Time::now();
+        ROS_INFO("start");
 
         Preprocess(cloud_filtered_ptr);
+        ROS_INFO("preprocess finished");
 
         if(cloud_filtered_ptr->points.size() == 0){
             ROS_ERROR("No cloud  input! ");
@@ -1170,17 +1277,20 @@ int main(int argc, char** argv){
             last_imu_pose = imu;
             imu_pose = imu;
 
-
             last_keyFrame_x = 0;
             last_keyFrame_y = 0;
             last_keyFrame_z = 0;
             cloud_queue.push_back(*cloud_filtered_ptr);
 
+            ROS_INFO("queue inited");
+
             pcl::copyPointCloud(*cloud_filtered_ptr, *local_map_ptr);
+            ROS_INFO("localmap inited");
 
             VoxelGrid(config.getFloat("global_show_VoxelFilter_size"), cloud_filtered_ptr, cloud_filtered_ptr);
             pcl::copyPointCloud(*cloud_filtered_ptr, *global_map_ptr);
-
+            ROS_INFO("globalmap inited");
+ 
         }else{
             last_imu_pose = imu_pose;
             imu_pose = imu;
@@ -1189,8 +1299,10 @@ int main(int argc, char** argv){
             ros::Time middle = ros::Time::now();
 
             if(config.getFloat("if_use_ndt") == 1){
+                ROS_INFO("try localization");
                 if(NDT(cloud_filtered_ptr, local_map_ptr, imu_to_lidar, current_pose, last_imu_pose, imu_pose , cloud_transformed_ptr)){
                     if_add_key_frame = true;
+                    ROS_INFO("localization success");
                 }else{
                     ROS_INFO("try relocalization");
                     EuclideanCluster(cloud_filtered_ptr, box_array, cloud_filtered_ptr);
@@ -1200,7 +1312,7 @@ int main(int argc, char** argv){
                     }else{
                         ROS_ERROR("relocalization failed");
                         current_pose = last_pose * imu_to_lidar.inverse() * last_imu_pose.inverse() * imu_pose * imu_to_lidar;
-                        if_add_key_frame = true; // false
+                        if_add_key_frame = true; // false 
                     }
                 }
             }else{
@@ -1225,7 +1337,8 @@ int main(int argc, char** argv){
                 last_keyFrame_y = current_pose(1, 3);
                 last_keyFrame_z = current_pose(2, 3);
 
-                EuclideanCluster(cloud_filtered_ptr, box_array, cloud_filtered_ptr);
+                ROS_INFO("start GPU Eiclidean Cluster");
+                GPUEuclideanCluster(cloud_filtered_ptr, box_array, cloud_filtered_ptr);
                 local_box_array.boxes.clear();
                 box_transformed_ptr->points.clear();
                 Transform(current_pose, cloud_filtered_ptr, cloud_transformed_ptr, box_array, local_box_array, box_transformed_ptr);

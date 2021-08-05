@@ -91,9 +91,9 @@ radius_outlier_min_preprocess: 3
 
 # bounding_box
 bbox_cone_judge_min_x: 0.01
-bbox_cone_judge_max_x: 0.5
+bbox_cone_judge_max_x: 0.3
 bbox_cone_judge_min_y: 0.01
-bbox_cone_judge_max_y: 0.5
+bbox_cone_judge_max_y: 0.3
 bbox_cone_judge_div_min: 0.2
 bbox_cone_judge_div_max: 4
 

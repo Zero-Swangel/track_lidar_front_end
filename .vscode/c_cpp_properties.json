@@ -1,0 +1,19 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "",
+        "limitSymbolsToIncludedHeaders": true
+      },
+      "includePath": [
+        "/opt/ros/noetic/include/**",
+        "/home/walker-ubuntu/Walkerspace/ros_ws/src/TTest/include/**",
+        "/home/walker-ubuntu/Walkerspace/SLAM_ws/src/lidar_slam/include/**",
+        "/home/walker-ubuntu/Walkerspace/ros_ws/src/track_lidar_back_end/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS"
+    }
+  ],
+  "version": 4
+}

@@ -14,8 +14,9 @@ add_compile_options(-std=c++14)
 ################################################
 ### 找到库依赖
 ################################################
+find_package(PCL 1.11 REQUIRED)
 find_package(catkin REQUIRED COMPONENTS
-  pcl_ros REQUIRED
+  pcl_ros
   roscpp
   std_msgs
   nav_msgs
@@ -61,3 +62,27 @@ list(APPEND TARGET_LIBRARIES
 ################################################
 add_executable(${PROJECT_NAME}_node src/track_lidar_front_end_node.cpp)
 target_link_libraries(${PROJECT_NAME}_node ${TARGET_LIBRARIES})
+
+
+
+
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_SOURCE_DIR}/lib)
+file(GLOB_RECURSE LIB_SRCS "${PROJECT_SOURCE_DIR}/src/*.cc")
+
+add_library(${PROJECT_NAME} SHARED
+        ${LIB_SRCS}
+        )
+
+set(TARGET_LIBRARIES "")
+list(APPEND TARGET_LIBRARIES
+        ${catkin_LIBRARIES}
+        # ${PCL_LIBRARIES}
+        # ...
+        )
+
+target_link_libraries(${PROJECT_NAME}
+        ${TARGET_LIBRARIES}
+        )
+
+add_executable(Node apps/App.cpp)
+target_link_libraries(Node ${PROJECT_NAME})

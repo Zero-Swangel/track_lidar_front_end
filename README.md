@@ -2,6 +2,7 @@
 
 ## 简介
 
+早期练习的slam前端，已被淘汰
 使用`roslaunch`加载参数并运行节点  
 一个基于PCL的前端里程计，效果不错，但跑到最后终究还是有明显的误差累计，配合后端的位姿优化有不错的结果  
 从老程序改来，有很多不完善的改动及测试中的遗留，更完善的前后端会在`lidar_slam`中完成  
@@ -11,7 +12,7 @@
 - PCL
 - Eigen3
 - jsk_recognition_msgs
-- [lidar_msgs](http://hrt-perception.icu/hrt21d/perception/lidar_msgs)
+- ~[lidar_msgs](http://hrt-perception.icu/hrt21d/perception/lidar_msgs)-~
 
 ## 项目的构建和运行
 

@@ -24,8 +24,6 @@
 #include <pcl/gpu/segmentation/impl/gpu_extract_clusters.hpp>
 
 #include <jsk_recognition_msgs/BoundingBoxArray.h>
-#include <lidar_msgs/BoundingBox.h>
-#include <lidar_msgs/BoundingBoxArray.h>
 #include <lidar_msgs/LidarOutput.h>
 
 #include <message_filters/subscriber.h>
@@ -612,6 +610,8 @@ bool NDT(pcl::PointCloud<pcl::PointXYZ>::Ptr source, pcl::PointCloud<pcl::PointX
 
     if((filtered_target->points.size() < filtered_source->points.size()*1.5) || filtered_source->size() < 120){
         ROS_ERROR("ndt.registration failded! lose frame!");
+        std::cout << "target: " << filtered_target->points.size() << std::endl;
+        std::cout << "source: " << filtered_source->points.size() << std::endl;
         current_pose = guess_matrix;
         return false;
     }else{
@@ -1337,8 +1337,8 @@ int main(int argc, char** argv){
                 last_keyFrame_y = current_pose(1, 3);
                 last_keyFrame_z = current_pose(2, 3);
 
-                ROS_INFO("start GPU Eiclidean Cluster");
-                GPUEuclideanCluster(cloud_filtered_ptr, box_array, cloud_filtered_ptr);
+                ROS_INFO("start GPU Euclidean Cluster");
+                EuclideanCluster(cloud_filtered_ptr, box_array, cloud_filtered_ptr);
                 local_box_array.boxes.clear();
                 box_transformed_ptr->points.clear();
                 Transform(current_pose, cloud_filtered_ptr, cloud_transformed_ptr, box_array, local_box_array, box_transformed_ptr);
